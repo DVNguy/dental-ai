@@ -7,14 +7,28 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Save, Undo, Info, Trash2, RotateCw, Move, X, Settings2, GripHorizontal, DollarSign } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { usePractice } from "@/contexts/PracticeContext";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import type { Room } from "@shared/schema";
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
-  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-  const [budget, setBudget] = useState(50000); // Game-like element
+  const { toast } = useToast();
+  const { practiceId, practice } = usePractice();
+  const queryClient = useQueryClient();
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [budget, setBudget] = useState(50000);
+
+  useEffect(() => {
+    if (practice) {
+      setBudget(practice.budget);
+    }
+  }, [practice]);
   
   const ROOM_TYPES = [
     { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100, cost: 2500 },
@@ -24,49 +38,87 @@ export default function LayoutEditor() {
     { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 120, h: 120, cost: 3000 },
   ];
 
-  const [rooms, setRooms] = useState([
-    { id: 1, type: "reception", name: "", x: 50, y: 50, w: 150, h: 100 },
-    { id: 2, type: "waiting", name: "", x: 250, y: 50, w: 200, h: 150 },
-    { id: 3, type: "exam", name: "Dental Chair 1", x: 50, y: 250, w: 120, h: 120 },
-  ]);
+  const { data: rooms = [] } = useQuery({
+    queryKey: ["rooms", practiceId],
+    queryFn: () => api.rooms.list(practiceId!),
+    enabled: !!practiceId,
+  });
+
+  const createRoomMutation = useMutation({
+    mutationFn: (data: { type: string; name: string; x: number; y: number; width: number; height: number }) =>
+      api.rooms.create(practiceId!, { ...data, practiceId: practiceId! }),
+    onSuccess: (newRoom) => {
+      queryClient.invalidateQueries({ queryKey: ["rooms", practiceId] });
+      setSelectedRoomId(newRoom.id);
+    },
+  });
+
+  const updateRoomMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Room> }) =>
+      api.rooms.update(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rooms", practiceId] });
+    },
+  });
+
+  const deleteRoomMutation = useMutation({
+    mutationFn: (id: string) => api.rooms.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rooms", practiceId] });
+      setSelectedRoomId(null);
+    },
+  });
+
+  const updateBudgetMutation = useMutation({
+    mutationFn: (newBudget: number) => api.practices.updateBudget(practiceId!, newBudget),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["practice", practiceId] });
+    },
+  });
 
   const addRoom = (typeId: string) => {
     const typeDef = ROOM_TYPES.find(t => t.id === typeId);
     if (!typeDef) return;
     
-    // Game mechanic: Check budget
     if (budget < typeDef.cost) {
-      // In a real app we'd show a toast here
+      toast({
+        title: "Insufficient Budget",
+        description: `You need $${typeDef.cost} to add this room.`,
+        variant: "destructive",
+      });
       return; 
     }
 
-    setBudget(prev => prev - typeDef.cost);
+    const newBudget = budget - typeDef.cost;
+    setBudget(newBudget);
+    updateBudgetMutation.mutate(newBudget);
 
-    const newId = Date.now();
-    setRooms([...rooms, { 
-      id: newId, 
+    createRoomMutation.mutate({ 
       type: typeId,
       name: "", 
       x: 100, 
       y: 100,
-      w: typeDef.w,
-      h: typeDef.h
-    }]);
-    setSelectedRoomId(newId);
+      width: typeDef.w,
+      height: typeDef.h
+    });
   };
 
-  const updateRoom = (id: number, updates: any) => {
-    setRooms(rooms.map(r => r.id === id ? { ...r, ...updates } : r));
+  const updateRoom = (id: string, updates: Partial<Room>) => {
+    updateRoomMutation.mutate({ id, updates });
   };
 
-  const deleteRoom = (id: number) => {
+  const deleteRoom = (id: string) => {
     const room = rooms.find(r => r.id === id);
     if (room) {
       const typeDef = ROOM_TYPES.find(t => t.id === room.type);
-      if (typeDef) setBudget(prev => prev + (typeDef.cost * 0.8)); // Refund 80%
+      if (typeDef) {
+        const refund = typeDef.cost * 0.8;
+        const newBudget = budget + refund;
+        setBudget(newBudget);
+        updateBudgetMutation.mutate(newBudget);
+      }
     }
-    setRooms(rooms.filter(r => r.id !== id));
-    setSelectedRoomId(null);
+    deleteRoomMutation.mutate(id);
   };
 
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
@@ -83,11 +135,20 @@ export default function LayoutEditor() {
           </div>
           
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setRooms([]); setBudget(50000); }}>
+            <div className="mr-4 px-3 py-1 bg-primary/10 text-primary rounded-md font-bold" data-testid="budget-display">
+              ${budget?.toLocaleString() || "0"}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => { 
+                const newBudget = 50000;
+                setBudget(newBudget);
+                updateBudgetMutation.mutate(newBudget);
+              }}
+              data-testid="button-reset"
+            >
               <Undo className="mr-2 h-4 w-4" /> {t("layout.reset")}
-            </Button>
-            <Button size="sm" className="bg-primary text-white shadow-md hover:shadow-lg transition-all">
-              <Save className="mr-2 h-4 w-4" /> {t("layout.save")}
             </Button>
           </div>
         </header>
@@ -112,6 +173,7 @@ export default function LayoutEditor() {
                     "w-full group flex items-center gap-3 p-3 rounded-xl border-2 border-transparent transition-all duration-200 text-left relative overflow-hidden",
                     budget < room.cost ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-primary/20 hover:bg-accent hover:shadow-md active:scale-95"
                   )}
+                  data-testid={`button-add-room-${room.id}`}
                 >
                   <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110", room.color)}>
                     <Plus className="w-5 h-5 opacity-50 group-hover:opacity-100 mix-blend-multiply" />
@@ -120,6 +182,7 @@ export default function LayoutEditor() {
                     <div className="text-sm font-bold leading-none truncate text-foreground/90">{room.label}</div>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-muted-foreground font-medium">{room.w}x{room.h}px</span>
+                      <span className="text-[10px] text-green-600 font-bold">${room.cost}</span>
                     </div>
                   </div>
                 </button>
@@ -176,8 +239,8 @@ export default function LayoutEditor() {
                       y: room.y, 
                       scale: 1, 
                       opacity: 1,
-                      width: room.w,
-                      height: room.h,
+                      width: room.width,
+                      height: room.height,
                       zIndex: isSelected ? 50 : 1
                     }}
                     onDragEnd={(_, info) => {
@@ -195,8 +258,8 @@ export default function LayoutEditor() {
                       typeDef?.color,
                       isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50 scale-[1.02]" : "hover:shadow-lg hover:border-primary/50"
                     )}
+                    data-testid={`room-${room.id}`}
                   >
-                    {/* Room Interior "Texture" */}
                     <div className="absolute inset-2 border border-black/5 rounded-sm pointer-events-none" />
                     
                     <div className="text-center pointer-events-none p-2 w-full overflow-hidden relative z-10">
@@ -210,7 +273,7 @@ export default function LayoutEditor() {
                       )}
                       {isSelected && (
                          <div className="text-[9px] text-slate-500 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">
-                           {Math.round(room.w)} x {Math.round(room.h)}
+                           {Math.round(room.width)} x {Math.round(room.height)}
                          </div>
                       )}
                     </div>
@@ -263,6 +326,7 @@ export default function LayoutEditor() {
                             onChange={(e) => updateRoom(selectedRoom.id, { name: e.target.value })}
                             placeholder={selectedRoomType?.label}
                             className="bg-white/50 border-slate-200 focus:bg-white transition-all"
+                            data-testid="input-room-name"
                         />
                     </div>
 
@@ -273,28 +337,30 @@ export default function LayoutEditor() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.width")}</Label>
-                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{selectedRoom.w}px</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{selectedRoom.width}px</span>
                         </div>
                         <Slider 
-                          value={[selectedRoom.w]} 
+                          value={[selectedRoom.width]} 
                           min={50} 
                           max={400} 
                           step={10} 
-                          onValueChange={([val]) => updateRoom(selectedRoom.id, { w: val })}
+                          onValueChange={([val]) => updateRoom(selectedRoom.id, { width: val })}
+                          data-testid="slider-width"
                         />
                       </div>
 
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                            <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.height")}</Label>
-                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{selectedRoom.h}px</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{selectedRoom.height}px</span>
                         </div>
                         <Slider 
-                          value={[selectedRoom.h]} 
+                          value={[selectedRoom.height]} 
                           min={50} 
                           max={400} 
                           step={10} 
-                          onValueChange={([val]) => updateRoom(selectedRoom.id, { h: val })}
+                          onValueChange={([val]) => updateRoom(selectedRoom.id, { height: val })}
+                          data-testid="slider-height"
                         />
                       </div>
                     </div>
@@ -306,7 +372,8 @@ export default function LayoutEditor() {
                        <Button 
                         variant="outline" 
                         className="hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-colors"
-                        onClick={() => updateRoom(selectedRoom.id, { w: selectedRoom.h, h: selectedRoom.w })}
+                        onClick={() => updateRoom(selectedRoom.id, { width: selectedRoom.height, height: selectedRoom.width })}
+                        data-testid="button-rotate"
                       >
                         <RotateCw className="mr-2 h-4 w-4" />
                         {t("editor.rotate")}
@@ -315,6 +382,7 @@ export default function LayoutEditor() {
                         variant="destructive" 
                         className="shadow-sm hover:shadow-md transition-all"
                         onClick={() => deleteRoom(selectedRoom.id)}
+                        data-testid="button-delete"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
                         {t("editor.delete")}
