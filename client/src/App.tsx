@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PracticeProvider } from "@/contexts/PracticeContext";
+import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import LayoutEditor from "@/pages/LayoutEditor";
 import Staff from "@/pages/Staff";
@@ -13,13 +14,15 @@ const queryClient = new QueryClient();
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/editor" component={LayoutEditor} />
-      <Route path="/staff" component={Staff} />
-      <Route path="/simulation" component={Simulation} />
-      <Route component={NotFound} />
-    </Switch>
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/editor" component={LayoutEditor} />
+        <Route path="/staff" component={Staff} />
+        <Route path="/simulation" component={Simulation} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
   );
 }
 
