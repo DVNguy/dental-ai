@@ -13,12 +13,14 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Room } from "@shared/schema";
+import { AIAdvisor } from "@/components/AIAdvisor";
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
   const { practiceId } = usePractice();
   const queryClient = useQueryClient();
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [advisorCollapsed, setAdvisorCollapsed] = useState(false);
   
   const ROOM_TYPES = [
     { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100 },
@@ -339,6 +341,16 @@ export default function LayoutEditor() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div className={cn(
+            "absolute bottom-4 right-4 z-40 transition-all",
+            selectedRoomId && !advisorCollapsed ? "bottom-4 right-[22rem]" : ""
+          )}>
+            <AIAdvisor 
+              collapsed={advisorCollapsed} 
+              onToggle={() => setAdvisorCollapsed(!advisorCollapsed)} 
+            />
+          </div>
 
         </div>
       </main>

@@ -8,6 +8,7 @@ import {
   insertSimulationSchema 
 } from "@shared/schema";
 import { runSimulation, type SimulationParameters } from "./simulation";
+import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -200,6 +201,62 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid simulation parameters" });
       }
       res.status(500).json({ error: "Failed to run simulation" });
+    }
+  });
+
+  const analyzeLayoutSchema = z.object({
+    practiceId: z.string(),
+    operatingHours: z.number().min(1).max(24).optional().default(8),
+  });
+
+  app.post("/api/ai/analyze-layout", async (req, res) => {
+    try {
+      const { practiceId, operatingHours } = analyzeLayoutSchema.parse(req.body);
+      
+      const practice = await storage.getPractice(practiceId);
+      if (!practice) {
+        return res.status(404).json({ error: "Practice not found" });
+      }
+
+      const rooms = await storage.getRoomsByPracticeId(practiceId);
+      const staff = await storage.getStaffByPracticeId(practiceId);
+
+      const analysis = await analyzeLayout(rooms, staff, operatingHours);
+      res.json(analysis);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request parameters" });
+      }
+      console.error("AI analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze layout" });
+    }
+  });
+
+  const recommendSchema = z.object({
+    practiceId: z.string(),
+    question: z.string().optional(),
+  });
+
+  app.post("/api/ai/recommend", async (req, res) => {
+    try {
+      const { practiceId, question } = recommendSchema.parse(req.body);
+      
+      const practice = await storage.getPractice(practiceId);
+      if (!practice) {
+        return res.status(404).json({ error: "Practice not found" });
+      }
+
+      const rooms = await storage.getRoomsByPracticeId(practiceId);
+      const staff = await storage.getStaffByPracticeId(practiceId);
+
+      const recommendation = await getQuickRecommendation(rooms, staff, question);
+      res.json({ recommendation });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request parameters" });
+      }
+      console.error("AI recommendation error:", error);
+      res.status(500).json({ error: "Failed to get recommendation" });
     }
   });
 

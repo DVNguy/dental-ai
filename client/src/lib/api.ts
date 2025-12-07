@@ -63,7 +63,7 @@ export const api = {
   },
 
   simulations: {
-    run: (data: { practiceId: string; patientVolume: number; duration: number }) =>
+    run: (data: { practiceId: string; patientVolume: number; operatingHours: number }) =>
       fetchAPI<{
         efficiencyScore: number;
         harmonyScore: number;
@@ -79,4 +79,55 @@ export const api = {
     }),
     list: (practiceId: string) => fetchAPI<Simulation[]>(`/api/practices/${practiceId}/simulations`),
   },
+
+  ai: {
+    analyzeLayout: (data: { practiceId: string; operatingHours?: number }) =>
+      fetchAPI<LayoutAnalysis>("/api/ai/analyze-layout", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getRecommendation: (data: { practiceId: string; question?: string }) =>
+      fetchAPI<{ recommendation: string }>("/api/ai/recommend", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  },
 };
+
+export interface LayoutAnalysis {
+  overallScore: number;
+  efficiencyScore: number;
+  staffingScore: number;
+  spaceUtilizationScore: number;
+  roomAnalyses: RoomAnalysis[];
+  staffingAnalysis: StaffingAnalysis;
+  capacityAnalysis: CapacityAnalysis;
+  recommendations: string[];
+  aiInsights: string;
+}
+
+export interface RoomAnalysis {
+  roomId: string;
+  roomName: string;
+  roomType: string;
+  sizeScore: number;
+  sizeAssessment: "undersized" | "optimal" | "oversized";
+  actualSqFt: number;
+  recommendation: string;
+}
+
+export interface StaffingAnalysis {
+  overallScore: number;
+  ratios: Record<string, {
+    actual: number;
+    optimal: number;
+    score: number;
+    recommendation: string;
+  }>;
+}
+
+export interface CapacityAnalysis {
+  estimatedCapacity: number;
+  capacityScore: number;
+  benchmarkComparison: string;
+}
