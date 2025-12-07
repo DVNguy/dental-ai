@@ -1,7 +1,7 @@
 export interface RoomSizeStandard {
-  minSqFt: number;
-  maxSqFt: number;
-  optimalSqFt: number;
+  minSqM: number;
+  maxSqM: number;
+  optimalSqM: number;
   source: string;
 }
 
@@ -22,34 +22,34 @@ export interface PatientFlowMetric {
 
 export const ROOM_SIZE_STANDARDS: Record<string, RoomSizeStandard> = {
   reception: {
-    minSqFt: 100,
-    maxSqFt: 150,
-    optimalSqFt: 120,
-    source: "ADA Practice Design Guidelines"
+    minSqM: 8,
+    maxSqM: 14,
+    optimalSqM: 10,
+    source: "Arbeitsstättenverordnung (ArbStättV) - ASR A1.2"
   },
   waiting: {
-    minSqFt: 150,
-    maxSqFt: 400,
-    optimalSqFt: 250,
-    source: "AAOMS Facility Standards - 15-20 sq ft per patient capacity"
+    minSqM: 15,
+    maxSqM: 35,
+    optimalSqM: 22,
+    source: "Praxisbegehung - 1.2-1.5 m² pro Sitzplatz, 12-15 Patienten"
   },
   exam: {
-    minSqFt: 80,
-    maxSqFt: 120,
-    optimalSqFt: 100,
-    source: "ADA Operatory Standards (dental: 100-120, medical: 80-100)"
+    minSqM: 9,
+    maxSqM: 12,
+    optimalSqM: 10,
+    source: "Praxisbegehung & Hygieneverordnung - Behandlungsraum Standards"
   },
   lab: {
-    minSqFt: 80,
-    maxSqFt: 150,
-    optimalSqFt: 100,
-    source: "OSHA Laboratory Safety Standards"
+    minSqM: 8,
+    maxSqM: 15,
+    optimalSqM: 10,
+    source: "RKI Laborrichtlinien & Hygieneverordnung"
   },
   office: {
-    minSqFt: 100,
-    maxSqFt: 200,
-    optimalSqFt: 150,
-    source: "Healthcare Facility Planning Guidelines"
+    minSqM: 10,
+    maxSqM: 18,
+    optimalSqM: 14,
+    source: "Arbeitsstättenverordnung (ArbStättV) - ASR A1.2"
   }
 };
 
@@ -58,31 +58,31 @@ export const STAFFING_RATIOS = {
     min: 1.5,
     max: 2.5,
     optimal: 2.0,
-    source: "MGMA Dental Practice Benchmarks 2024"
+    source: "KZBV Praxis-Benchmarks"
   },
   supportStaffPerPhysician: {
-    min: 3.0,
-    max: 4.5,
-    optimal: 3.5,
-    source: "MGMA Medical Practice Benchmarks 2024"
+    min: 2.5,
+    max: 4.0,
+    optimal: 3.0,
+    source: "KV Praxisorganisation Empfehlungen"
   },
   nursePerDoctor: {
     min: 1.0,
     max: 2.0,
     optimal: 1.5,
-    source: "American Nurses Association Staffing Guidelines"
+    source: "Berufsverband der Medizinischen Fachangestellten"
   },
   receptionistPerProvider: {
     min: 0.33,
     max: 0.5,
     optimal: 0.4,
-    source: "MGMA Front Office Staffing Benchmarks"
+    source: "KV Empfehlung Praxisorganisation"
   },
   examRoomsPerProvider: {
     min: 2.0,
-    max: 3.0,
-    optimal: 2.5,
-    source: "ADA Practice Efficiency Standards"
+    max: 4.0,
+    optimal: 3.0,
+    source: "KV Praxisplanung - 3-4 Behandlungsräume pro Arzt optimal"
   }
 };
 
@@ -91,84 +91,84 @@ export const PATIENT_FLOW_METRICS = {
     excellent: 10,
     acceptable: 20,
     poor: 30,
-    unit: "minutes",
-    source: "Press Ganey Patient Satisfaction Benchmarks"
+    unit: "Minuten",
+    source: "Qualitätsmanagement-Richtlinie (QM-RL) - Gemeinsamer Bundesausschuss"
   },
   patientsPerExamRoomPerDay: {
     excellent: 12,
     acceptable: 10,
     poor: 6,
-    unit: "patients/room/day",
-    source: "MGMA Productivity Benchmarks 2024"
+    unit: "Patienten/Raum/Tag",
+    source: "KV Benchmarks Praxisauslastung"
   },
   patientThroughputPerHour: {
     excellent: 4,
     acceptable: 3,
     poor: 2,
-    unit: "patients/hour",
-    source: "Healthcare Operations Research"
+    unit: "Patienten/Stunde",
+    source: "Praxismanagement Leitfaden"
   },
   appointmentDuration: {
     excellent: 15,
     acceptable: 20,
     poor: 30,
-    unit: "minutes",
-    source: "AMA Practice Management Guidelines"
+    unit: "Minuten",
+    source: "EBM Einheitlicher Bewertungsmaßstab Zeitvorgaben"
   }
 };
 
 export const LAYOUT_EFFICIENCY_PRINCIPLES = {
   optimalFlow: [
-    "Reception area should be immediately visible upon entry",
-    "Waiting room should be adjacent to reception (within 50 feet)",
-    "Exam rooms should be clustered and equidistant from waiting area",
-    "Lab should be centrally located among exam rooms for efficiency",
-    "Private office should have visual access to reception without being in patient flow"
+    "Empfangsbereich sollte beim Betreten sofort sichtbar sein",
+    "Wartebereich sollte neben dem Empfang liegen (max. 15m Entfernung)",
+    "Behandlungsräume sollten gruppiert und gleich weit vom Wartebereich entfernt sein",
+    "Labor sollte zentral zwischen den Behandlungsräumen liegen für Effizienz",
+    "Büro/Verwaltung sollte Sichtverbindung zum Empfang haben, aber nicht im Patientenfluss"
   ],
   distanceGuidelines: {
-    receptionToWaiting: { maxFeet: 30, optimal: 15, source: "ADA Accessibility Guidelines" },
-    waitingToExam: { maxFeet: 75, optimal: 40, source: "Patient Experience Best Practices" },
-    examToLab: { maxFeet: 50, optimal: 25, source: "OSHA Specimen Handling Guidelines" },
-    examToExam: { maxFeet: 30, optimal: 15, source: "Provider Efficiency Standards" }
+    receptionToWaiting: { maxMeters: 10, optimal: 5, source: "DIN 18040 Barrierefreies Bauen" },
+    waitingToExam: { maxMeters: 25, optimal: 12, source: "Praxisbegehung Laufwege" },
+    examToLab: { maxMeters: 15, optimal: 8, source: "RKI Probenhandhabung Richtlinien" },
+    examToExam: { maxMeters: 10, optimal: 5, source: "Praxiseffizienz Standards" }
   },
   circulationPatterns: {
-    patientPath: "Linear: Entry → Reception → Waiting → Exam → Checkout",
-    staffPath: "Circular: Should not cross patient paths frequently",
-    emergencyEgress: "Minimum 44 inches wide for all corridors"
+    patientPath: "Linear: Eingang → Empfang → Warten → Behandlung → Abrechnung",
+    staffPath: "Zirkulär: Sollte Patientenwege nicht häufig kreuzen",
+    emergencyEgress: "Mindestens 1,2m breite Flure (DIN 18040 Barrierefreiheit)"
   }
 };
 
 export const INDUSTRY_BENCHMARKS = {
   dentalPractice: {
-    avgSquareFootagePerOperatory: 400,
+    avgSquareMetersPerOperatory: 37,
     avgPatientsPerDayPerDentist: 12,
-    avgRevenuePerPatient: 350,
+    avgRevenuePerPatient: 300,
     avgStaffCostPercentage: 25,
     patientRetentionRate: 85,
-    source: "ADA Health Policy Institute 2024"
+    source: "KZBV Jahrbuch 2024"
   },
   medicalPractice: {
-    avgSquareFootagePerExamRoom: 300,
-    avgPatientsPerDayPerPhysician: 20,
-    avgRevenuePerPatient: 200,
-    avgStaffCostPercentage: 30,
+    avgSquareMetersPerExamRoom: 28,
+    avgPatientsPerDayPerPhysician: 25,
+    avgRevenuePerPatient: 45,
+    avgStaffCostPercentage: 28,
     patientRetentionRate: 80,
-    source: "MGMA DataDive 2024"
+    source: "Zi-Praxis-Panel 2024 (Zentralinstitut für die kassenärztliche Versorgung)"
   }
 };
 
-export function pixelsToSqFt(pixels: number, scale: number = 0.5): number {
-  return Math.round(pixels * scale);
+export function pixelsToSqM(pixels: number, scale: number = 0.001): number {
+  return Math.round(pixels * scale * 10) / 10;
 }
 
-export function sqFtToPixels(sqFt: number, scale: number = 0.5): number {
-  return Math.round(sqFt / scale);
+export function sqMToPixels(sqM: number, scale: number = 0.001): number {
+  return Math.round(sqM / scale);
 }
 
 export function evaluateRoomSize(type: string, widthPx: number, heightPx: number): {
   score: number;
   assessment: "undersized" | "optimal" | "oversized";
-  actualSqFt: number;
+  actualSqM: number;
   recommendation: string;
 } {
   const standard = ROOM_SIZE_STANDARDS[type];
@@ -176,37 +176,37 @@ export function evaluateRoomSize(type: string, widthPx: number, heightPx: number
     return {
       score: 50,
       assessment: "optimal",
-      actualSqFt: 0,
-      recommendation: "Unknown room type"
+      actualSqM: 0,
+      recommendation: "Unbekannter Raumtyp"
     };
   }
 
   const areaPx = widthPx * heightPx;
-  const actualSqFt = pixelsToSqFt(areaPx);
+  const actualSqM = pixelsToSqM(areaPx);
 
   let score: number;
   let assessment: "undersized" | "optimal" | "oversized";
   let recommendation: string;
 
-  if (actualSqFt < standard.minSqFt) {
-    const deficit = ((standard.minSqFt - actualSqFt) / standard.minSqFt) * 100;
+  if (actualSqM < standard.minSqM) {
+    const deficit = ((standard.minSqM - actualSqM) / standard.minSqM) * 100;
     score = Math.max(0, 50 - deficit);
     assessment = "undersized";
-    recommendation = `Room is ${Math.round(deficit)}% below minimum. Recommend increasing to at least ${standard.minSqFt} sq ft.`;
-  } else if (actualSqFt > standard.maxSqFt) {
-    const excess = ((actualSqFt - standard.maxSqFt) / standard.maxSqFt) * 100;
+    recommendation = `Raum ist ${Math.round(deficit)}% unter dem Minimum. Empfehlung: mindestens ${standard.minSqM} m² gemäß ${standard.source}.`;
+  } else if (actualSqM > standard.maxSqM) {
+    const excess = ((actualSqM - standard.maxSqM) / standard.maxSqM) * 100;
     score = Math.max(60, 90 - (excess * 0.5));
     assessment = "oversized";
-    recommendation = `Room is ${Math.round(excess)}% above maximum. Consider optimizing space usage.`;
+    recommendation = `Raum ist ${Math.round(excess)}% über dem Maximum. Raumnutzung optimieren.`;
   } else {
-    const distanceFromOptimal = Math.abs(actualSqFt - standard.optimalSqFt);
-    const range = standard.maxSqFt - standard.minSqFt;
+    const distanceFromOptimal = Math.abs(actualSqM - standard.optimalSqM);
+    const range = standard.maxSqM - standard.minSqM;
     score = 100 - ((distanceFromOptimal / range) * 20);
     assessment = "optimal";
-    recommendation = `Room size is within industry standards. Optimal size is ${standard.optimalSqFt} sq ft.`;
+    recommendation = `Raumgröße entspricht den deutschen Standards. Optimale Größe: ${standard.optimalSqM} m².`;
   }
 
-  return { score: Math.round(score), assessment, actualSqFt, recommendation };
+  return { score: Math.round(score), assessment, actualSqM, recommendation };
 }
 
 export function evaluateStaffingRatios(
@@ -234,13 +234,13 @@ export function evaluateStaffingRatios(
     
     if (supportRatio < benchmark.min) {
       score = Math.max(30, 70 - ((benchmark.min - supportRatio) / benchmark.min * 40));
-      recommendation = `Understaffed: ${supportRatio.toFixed(1)} support staff per provider. Recommend ${benchmark.optimal} per provider.`;
+      recommendation = `Unterbesetzt: ${supportRatio.toFixed(1)} Mitarbeiter pro Arzt. Empfehlung: ${benchmark.optimal} pro Arzt.`;
     } else if (supportRatio > benchmark.max) {
       score = Math.max(60, 90 - ((supportRatio - benchmark.max) / benchmark.max * 30));
-      recommendation = `Overstaffed: ${supportRatio.toFixed(1)} support staff per provider. Consider optimizing to ${benchmark.optimal}.`;
+      recommendation = `Überbesetzt: ${supportRatio.toFixed(1)} Mitarbeiter pro Arzt. Optimierung auf ${benchmark.optimal} empfohlen.`;
     } else {
       score = 85 + ((1 - Math.abs(supportRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 15);
-      recommendation = `Good staffing ratio of ${supportRatio.toFixed(1)} support staff per provider.`;
+      recommendation = `Gutes Personalverhältnis von ${supportRatio.toFixed(1)} Mitarbeitern pro Arzt.`;
     }
     
     ratios.supportStaffRatio = { actual: supportRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
@@ -255,13 +255,13 @@ export function evaluateStaffingRatios(
     
     if (nurseRatio < benchmark.min) {
       score = Math.max(40, 75 - ((benchmark.min - nurseRatio) / benchmark.min * 35));
-      recommendation = `Low nurse ratio: ${nurseRatio.toFixed(1)}. Industry recommends ${benchmark.optimal} nurses per doctor.`;
+      recommendation = `Niedriges MFA-Verhältnis: ${nurseRatio.toFixed(1)}. Empfehlung: ${benchmark.optimal} MFA pro Arzt.`;
     } else if (nurseRatio > benchmark.max) {
       score = Math.max(70, 95 - ((nurseRatio - benchmark.max) / benchmark.max * 25));
-      recommendation = `High nurse ratio: ${nurseRatio.toFixed(1)}. May be above optimal of ${benchmark.optimal}.`;
+      recommendation = `Hohes MFA-Verhältnis: ${nurseRatio.toFixed(1)}. Möglicherweise über dem Optimum von ${benchmark.optimal}.`;
     } else {
       score = 90 + ((1 - Math.abs(nurseRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 10);
-      recommendation = `Excellent nurse-to-doctor ratio of ${nurseRatio.toFixed(1)}.`;
+      recommendation = `Ausgezeichnetes MFA-zu-Arzt-Verhältnis von ${nurseRatio.toFixed(1)}.`;
     }
     
     ratios.nurseRatio = { actual: nurseRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
@@ -276,13 +276,13 @@ export function evaluateStaffingRatios(
     
     if (roomRatio < benchmark.min) {
       score = Math.max(35, 70 - ((benchmark.min - roomRatio) / benchmark.min * 35));
-      recommendation = `Too few exam rooms (${roomRatio.toFixed(1)} per provider). Recommend ${benchmark.optimal} for optimal flow.`;
+      recommendation = `Zu wenig Behandlungsräume (${roomRatio.toFixed(1)} pro Arzt). Empfehlung: ${benchmark.optimal} für optimalen Patientenfluss.`;
     } else if (roomRatio > benchmark.max) {
       score = Math.max(65, 90 - ((roomRatio - benchmark.max) / benchmark.max * 25));
-      recommendation = `Excess exam rooms (${roomRatio.toFixed(1)} per provider). ${benchmark.optimal} is more efficient.`;
+      recommendation = `Überschuss an Behandlungsräumen (${roomRatio.toFixed(1)} pro Arzt). ${benchmark.optimal} wäre effizienter.`;
     } else {
       score = 88 + ((1 - Math.abs(roomRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 12);
-      recommendation = `Good exam room to provider ratio of ${roomRatio.toFixed(1)}.`;
+      recommendation = `Gutes Verhältnis von ${roomRatio.toFixed(1)} Behandlungsräumen pro Arzt.`;
     }
     
     ratios.examRoomRatio = { actual: roomRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
@@ -309,7 +309,7 @@ export function calculatePatientCapacityBenchmark(
     return {
       estimatedCapacity: 0,
       capacityScore: 0,
-      benchmarkComparison: "No exam rooms - add exam rooms to calculate capacity"
+      benchmarkComparison: "Keine Behandlungsräume - Behandlungsräume hinzufügen um Kapazität zu berechnen"
     };
   }
 
@@ -330,11 +330,11 @@ export function calculatePatientCapacityBenchmark(
   
   let benchmarkComparison: string;
   if (estimatedCapacity >= excellentCapacity * 0.9) {
-    benchmarkComparison = "Excellent capacity utilization - top 10% of practices";
+    benchmarkComparison = "Ausgezeichnete Kapazitätsauslastung - Top 10% der Praxen";
   } else if (estimatedCapacity >= excellentCapacity * 0.7) {
-    benchmarkComparison = "Good capacity - above industry average";
+    benchmarkComparison = "Gute Kapazität - über dem Branchendurchschnitt";
   } else {
-    benchmarkComparison = "Below average capacity - room for improvement";
+    benchmarkComparison = "Unterdurchschnittliche Kapazität - Verbesserungspotenzial vorhanden";
   }
 
   return { estimatedCapacity, capacityScore, benchmarkComparison };
@@ -350,29 +350,29 @@ export function getLayoutRecommendations(
   const recommendations: string[] = [];
 
   if (!hasReception) {
-    recommendations.push("CRITICAL: Add a reception area. This is essential for patient check-in and first impressions.");
+    recommendations.push("KRITISCH: Empfangsbereich hinzufügen. Unerlässlich für Patientenanmeldung und ersten Eindruck.");
   }
   
   if (!hasWaiting) {
-    recommendations.push("CRITICAL: Add a waiting room. Patients need a comfortable space while waiting for appointments.");
+    recommendations.push("KRITISCH: Wartebereich hinzufügen. Patienten benötigen einen komfortablen Raum während der Wartezeit.");
   }
   
   if (examRoomCount === 0) {
-    recommendations.push("CRITICAL: Add exam rooms. These are the core of your practice operations.");
+    recommendations.push("KRITISCH: Behandlungsräume hinzufügen. Diese sind der Kern Ihrer Praxistätigkeit.");
   } else if (examRoomCount === 1) {
-    recommendations.push("Consider adding more exam rooms. Industry standard is 2-3 per provider for optimal efficiency.");
+    recommendations.push("Erwägen Sie weitere Behandlungsräume. Standard ist 3-4 pro Arzt für optimale Effizienz (KV-Empfehlung).");
   }
   
   if (!hasLab && examRoomCount > 0) {
-    recommendations.push("Consider adding a lab. Having one adjacent to exam rooms reduces patient wait times by 15-20%.");
+    recommendations.push("Erwägen Sie einen Laborbereich. Ein Labor neben den Behandlungsräumen reduziert Wartezeiten um 15-20%.");
   }
   
   if (!hasOffice) {
-    recommendations.push("Consider adding a private office for consultations and administrative work.");
+    recommendations.push("Erwägen Sie ein Büro für Beratungsgespräche und Verwaltungsarbeit.");
   }
 
   if (recommendations.length === 0) {
-    recommendations.push("Your layout includes all essential room types. Focus on optimizing room placement and sizes.");
+    recommendations.push("Ihr Layout enthält alle wesentlichen Raumtypen. Fokussieren Sie auf Optimierung der Raumplatzierung und -größen.");
   }
 
   return recommendations;

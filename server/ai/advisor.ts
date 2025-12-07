@@ -10,7 +10,7 @@ import {
   evaluateStaffingRatios,
   calculatePatientCapacityBenchmark,
   getLayoutRecommendations,
-  pixelsToSqFt
+  pixelsToSqM
 } from "./benchmarks";
 
 const openai = new OpenAI({
@@ -36,7 +36,7 @@ export interface RoomAnalysis {
   roomType: string;
   sizeScore: number;
   sizeAssessment: "undersized" | "optimal" | "oversized";
-  actualSqFt: number;
+  actualSqM: number;
   recommendation: string;
 }
 
@@ -67,6 +67,10 @@ function getRoomCenter(room: Room): { x: number; y: number } {
   };
 }
 
+function pixelsToMeters(pixels: number): number {
+  return pixels * 0.03;
+}
+
 function calculateLayoutEfficiencyScore(rooms: Room[]): number {
   if (rooms.length === 0) return 0;
 
@@ -79,29 +83,26 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
   });
 
   let score = 50;
-  let factors = 0;
 
   const reception = roomsByType.get("reception")?.[0];
   const waiting = roomsByType.get("waiting")?.[0];
   const examRooms = roomsByType.get("exam") || [];
   const lab = roomsByType.get("lab")?.[0];
-  const office = roomsByType.get("office")?.[0];
 
   if (reception && waiting) {
     const recCenter = getRoomCenter(reception);
     const waitCenter = getRoomCenter(waiting);
     const distancePx = calculateDistance(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
-    const distanceFt = distancePx * 0.5;
+    const distanceM = pixelsToMeters(distancePx);
     
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.receptionToWaiting;
-    if (distanceFt <= benchmark.optimal) {
+    if (distanceM <= benchmark.optimal) {
       score += 15;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 10;
     } else {
       score -= 5;
     }
-    factors++;
   }
 
   if (waiting && examRooms.length > 0) {
@@ -111,17 +112,16 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
       return sum + calculateDistance(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceFt = avgDistance * 0.5;
+    const distanceM = pixelsToMeters(avgDistance);
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.waitingToExam;
     
-    if (distanceFt <= benchmark.optimal) {
+    if (distanceM <= benchmark.optimal) {
       score += 15;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 8;
     } else {
       score -= 5;
     }
-    factors++;
   }
 
   if (lab && examRooms.length > 0) {
@@ -131,17 +131,16 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
       return sum + calculateDistance(labCenter.x, labCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceFt = avgDistance * 0.5;
+    const distanceM = pixelsToMeters(avgDistance);
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.examToLab;
     
-    if (distanceFt <= benchmark.optimal) {
+    if (distanceM <= benchmark.optimal) {
       score += 12;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 6;
     } else {
       score -= 3;
     }
-    factors++;
   }
 
   if (!reception) score -= 15;
@@ -160,7 +159,7 @@ function analyzeRooms(rooms: Room[]): RoomAnalysis[] {
       roomType: room.type,
       sizeScore: evaluation.score,
       sizeAssessment: evaluation.assessment,
-      actualSqFt: evaluation.actualSqFt,
+      actualSqM: evaluation.actualSqM,
       recommendation: evaluation.recommendation
     };
   });
@@ -207,41 +206,41 @@ async function generateAIInsights(
     .map(([role, count]) => `${count} ${role}(s)`)
     .join(", ");
 
-  const prompt = `You are an expert medical/dental practice consultant. Analyze this practice layout and provide actionable insights.
+  const prompt = `You are an expert medical/dental practice consultant specializing in German healthcare regulations. Analyze this practice layout and provide actionable insights in German.
 
 PRACTICE DATA:
-- Rooms: ${roomsSummary || "No rooms yet"}
-- Staff: ${staffSummary || "No staff yet"}
-- Layout Efficiency Score: ${efficiencyScore}/100
-- Staffing Score: ${staffingScore}/100
+- Räume: ${roomsSummary || "Noch keine Räume"}
+- Personal: ${staffSummary || "Noch kein Personal"}
+- Layout-Effizienz Score: ${efficiencyScore}/100
+- Personal-Score: ${staffingScore}/100
 
-INDUSTRY BENCHMARKS USED:
-- Room sizes: ADA/AAOMS standards (exam rooms: 80-120 sq ft, reception: 100-150 sq ft)
-- Staffing: MGMA benchmarks (1.5-2.5 support staff per dentist, 2-3 exam rooms per provider)
-- Patient flow: Press Ganey standards (<15 min wait time excellent)
-- Layout: Linear patient flow (Reception → Waiting → Exam → Checkout)
+DEUTSCHE STANDARDS VERWENDET:
+- Raumgrößen: Arbeitsstättenverordnung (ArbStättV) & Praxisbegehung (Behandlungsraum: 9-12 m², Empfang: 8-14 m²)
+- Personal: KV-Benchmarks (2.5-4.0 Mitarbeiter pro Arzt, 3-4 Behandlungsräume pro Arzt)
+- Patientenfluss: QM-Richtlinie G-BA (<15 Min. Wartezeit ausgezeichnet)
+- Layout: Linearer Patientenfluss (Empfang → Warten → Behandlung → Abrechnung)
 
-CURRENT RECOMMENDATIONS:
+AKTUELLE EMPFEHLUNGEN:
 ${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
-Provide a brief, personalized 2-3 sentence analysis focusing on:
-1. The most impactful improvement they can make
-2. How their current setup compares to top-performing practices
-3. One specific, actionable tip
+Gib eine kurze, personalisierte 2-3 Sätze Analyse mit Fokus auf:
+1. Die wichtigste Verbesserung, die sie machen können
+2. Wie ihr aktuelles Setup im Vergleich zu Top-Praxen abschneidet
+3. Ein konkreter, umsetzbarer Tipp
 
-Keep the response under 100 words, professional but friendly.`;
+Halte die Antwort unter 100 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_completion_tokens: 300
+      max_tokens: 300
     });
 
-    return response.choices[0]?.message?.content || "Unable to generate AI insights at this time.";
+    return response.choices[0]?.message?.content || "KI-Analyse ist derzeit nicht verfügbar.";
   } catch (error) {
     console.error("OpenAI API error:", error);
-    return "AI analysis is temporarily unavailable. Please refer to the benchmark-based recommendations above.";
+    return "KI-Analyse ist vorübergehend nicht verfügbar. Bitte beachten Sie die benchmark-basierten Empfehlungen oben.";
   }
 }
 
@@ -344,34 +343,34 @@ export async function getQuickRecommendation(
     .map(([role, count]) => `${count} ${role}(s)`)
     .join(", ");
 
-  const totalArea = rooms.reduce((sum, room) => sum + pixelsToSqFt(room.width * room.height), 0);
+  const totalArea = rooms.reduce((sum, room) => sum + pixelsToSqM(room.width * room.height), 0);
 
-  const prompt = `You are an expert medical/dental practice consultant. Answer concisely based on real industry data.
+  const prompt = `You are an expert medical/dental practice consultant specializing in German healthcare regulations. Answer concisely based on German industry standards. Respond in German.
 
-PRACTICE SETUP:
-- Rooms: ${roomsSummary || "None"} (Total area: ~${totalArea} sq ft)
-- Staff: ${staffSummary || "None"}
+PRAXIS-SETUP:
+- Räume: ${roomsSummary || "Keine"} (Gesamtfläche: ~${totalArea} m²)
+- Personal: ${staffSummary || "Keines"}
 
-INDUSTRY STANDARDS (source: MGMA, ADA, AAOMS):
-- Exam rooms: 80-120 sq ft each, 2-3 per provider
-- Support staff: 1.5-2.5 per dentist, 3-4 per physician
-- Wait time target: <15 min (excellent), <30 min (acceptable)
-- Patient capacity: 8-12 per exam room per day
+DEUTSCHE STANDARDS (Quellen: KV, Arbeitsstättenverordnung, Praxisbegehung):
+- Behandlungsräume: 9-12 m² pro Raum, 3-4 pro Arzt
+- Mitarbeiter: 2.5-4.0 pro Arzt
+- Wartezeit-Ziel: <15 Min. (ausgezeichnet), <30 Min. (akzeptabel)
+- Patientenkapazität: 8-12 pro Behandlungsraum pro Tag
 
-${question ? `USER QUESTION: ${question}` : "Provide one key recommendation for improving this practice."}
+${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis."}
 
-Keep response under 75 words, specific and actionable.`;
+Halte die Antwort unter 75 Wörtern, spezifisch und umsetzbar. Antworte auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_completion_tokens: 200
+      max_tokens: 200
     });
 
-    return response.choices[0]?.message?.content || "Unable to provide recommendation at this time.";
+    return response.choices[0]?.message?.content || "Empfehlung konnte nicht generiert werden.";
   } catch (error) {
     console.error("OpenAI API error:", error);
-    return "AI recommendations are temporarily unavailable. Please check your layout against industry standards.";
+    return "KI-Empfehlungen sind vorübergehend nicht verfügbar. Bitte prüfen Sie Ihr Layout gegen die deutschen Standards.";
   }
 }

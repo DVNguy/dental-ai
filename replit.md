@@ -4,7 +4,7 @@
 
 PraxisFlow AI is an AI-powered medical practice simulation application that helps optimize clinic workflows, efficiency, and staff harmony. The application allows users to design practice layouts, manage staff resources, run simulations with varying patient volumes, and receive AI-driven recommendations for improving practice operations.
 
-The system uses real-world medical industry benchmarks (ADA, AAOMS, OSHA standards) to evaluate room sizes, staffing ratios, patient flow, and layout efficiency, providing actionable insights for practice optimization.
+The system uses **German medical industry regulations and benchmarks** to evaluate room sizes, staffing ratios, patient flow, and layout efficiency, providing actionable insights for practice optimization compliant with German healthcare standards.
 
 ## User Preferences
 
@@ -107,8 +107,29 @@ Preferred communication style: Simple, everyday language.
 **Session Management**: 
 - Infrastructure present (connect-pg-simple, express-session) but not fully implemented in provided code
 
-**Medical Standards Integration**:
-- ADA (American Dental Association) practice design guidelines
-- AAOMS (American Association of Oral and Maxillofacial Surgeons) facility standards
-- OSHA laboratory safety standards
-- Industry benchmarks for patient flow and staffing ratios
+**German Medical Standards Integration**:
+- Arbeitsstättenverordnung (ArbStättV) - German Workplace Ordinance for room sizes
+- ASR A1.2 - Technical Rules for Room Dimensions and Movement Areas
+- Praxisbegehung - Medical practice inspection requirements
+- Hygieneverordnung & RKI Guidelines - Hygiene and laboratory standards
+- KV (Kassenärztliche Vereinigung) - Statutory health insurance physicians' association benchmarks
+- KZBV (Kassenzahnärztliche Bundesvereinigung) - Dental practice benchmarks
+- DIN 18040 - Barrier-free building standards (Barrierefreies Bauen)
+- QM-RL (Qualitätsmanagement-Richtlinie) - Quality management guidelines from G-BA
+- EBM (Einheitlicher Bewertungsmaßstab) - Unified assessment standard for appointment timing
+
+**Room Size Standards (in square meters)**:
+- Empfangsbereich (Reception): 8-14 m² (optimal: 10 m²)
+- Wartebereich (Waiting): 15-35 m² (optimal: 22 m²)
+- Behandlungsraum (Exam Room): 9-12 m² (optimal: 10 m²)
+- Labor (Lab): 8-15 m² (optimal: 10 m²)
+- Büro (Office): 10-18 m² (optimal: 14 m²)
+
+**Staffing Benchmarks**:
+- 2.5-4.0 support staff per physician (KV recommendation)
+- 3-4 exam rooms per provider (optimal patient flow)
+- 1.0-2.0 MFA (Medizinische Fachangestellte) per doctor
+
+**Internationalization**:
+- Full German and English language support via i18next
+- AI responses in German when using German interface

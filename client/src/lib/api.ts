@@ -112,7 +112,7 @@ export interface RoomAnalysis {
   roomType: string;
   sizeScore: number;
   sizeAssessment: "undersized" | "optimal" | "oversized";
-  actualSqFt: number;
+  actualSqM: number;
   recommendation: string;
 }
 
