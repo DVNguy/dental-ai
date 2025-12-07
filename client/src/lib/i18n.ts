@@ -64,6 +64,7 @@ const resources = {
       "rooms.office": "Doctor Office",
 
       "editor.properties": "Properties",
+      "editor.roomName": "Room Name",
       "editor.width": "Width",
       "editor.height": "Height",
       "editor.delete": "Delete Room",
@@ -134,6 +135,7 @@ const resources = {
       "rooms.office": "Arztzimmer",
 
       "editor.properties": "Eigenschaften",
+      "editor.roomName": "Raumbezeichnung",
       "editor.width": "Breite",
       "editor.height": "Höhe",
       "editor.delete": "Raum löschen",
