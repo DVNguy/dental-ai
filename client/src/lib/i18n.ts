@@ -61,7 +61,15 @@ const resources = {
       "rooms.waiting": "Waiting Room",
       "rooms.exam": "Exam Room",
       "rooms.lab": "Laboratory",
-      "rooms.office": "Doctor Office"
+      "rooms.office": "Doctor Office",
+
+      "editor.properties": "Properties",
+      "editor.width": "Width",
+      "editor.height": "Height",
+      "editor.delete": "Delete Room",
+      "editor.rotate": "Rotate",
+      "editor.noSelection": "Select a room to edit",
+      "editor.selected": "Selected"
     }
   },
   de: {
@@ -123,7 +131,15 @@ const resources = {
       "rooms.waiting": "Wartezimmer",
       "rooms.exam": "Behandlungsraum",
       "rooms.lab": "Labor",
-      "rooms.office": "Arztzimmer"
+      "rooms.office": "Arztzimmer",
+
+      "editor.properties": "Eigenschaften",
+      "editor.width": "Breite",
+      "editor.height": "Höhe",
+      "editor.delete": "Raum löschen",
+      "editor.rotate": "Drehen",
+      "editor.noSelection": "Raum auswählen zum Bearbeiten",
+      "editor.selected": "Ausgewählt"
     }
   }
 };
