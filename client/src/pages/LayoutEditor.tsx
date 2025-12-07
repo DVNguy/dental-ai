@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2 } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -202,18 +202,25 @@ export default function LayoutEditor() {
                         y: room.y + info.offset.y 
                       });
                     }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedRoomId(room.id);
-                    }}
                     className={cn(
-                      "absolute rounded-lg border-2 flex flex-col items-center justify-center cursor-move select-none transition-all duration-200",
+                      "absolute rounded-lg border-2 flex flex-col items-center justify-center cursor-move select-none transition-all duration-200 group",
                       typeDef?.color,
                       isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50 scale-[1.02]" : "hover:shadow-lg hover:border-primary/50"
                     )}
                     data-testid={`room-${room.id}`}
                   >
                     <div className="absolute inset-2 border border-black/5 rounded-sm pointer-events-none" />
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRoomId(room.id);
+                      }}
+                      className="absolute top-1 right-1 p-1.5 rounded-md bg-white/80 hover:bg-white shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20"
+                      data-testid={`button-edit-room-${room.id}`}
+                    >
+                      <Pencil className="w-3 h-3 text-slate-600" />
+                    </button>
                     
                     <div className="text-center pointer-events-none p-2 w-full overflow-hidden relative z-10">
                       <div className="font-bold text-xs text-slate-800 truncate px-1">
