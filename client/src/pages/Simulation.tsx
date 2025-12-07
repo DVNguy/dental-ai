@@ -270,15 +270,15 @@ export default function Simulation() {
     if (result.waitTime > 30) {
       insights.push({
         icon: Clock,
-        title: "High Wait Times",
-        description: `${result.waitTime} min wait exceeds 30 min threshold. Consider adding exam rooms or staff.`,
+        title: t("sim.highWaitTimes"),
+        description: t("sim.highWaitTimesDesc", { time: result.waitTime }),
         priority: "high"
       });
     } else if (result.waitTime > 15) {
       insights.push({
         icon: Clock,
-        title: "Wait Time Above Target",
-        description: `${result.waitTime} min wait. Industry target is <15 min for excellent experience.`,
+        title: t("sim.waitAboveTarget"),
+        description: t("sim.waitAboveTargetDesc", { time: result.waitTime }),
         priority: "medium"
       });
     }
@@ -286,8 +286,8 @@ export default function Simulation() {
     if (result.efficiencyScore < 60) {
       insights.push({
         icon: Activity,
-        title: "Layout Efficiency Issue",
-        description: "Room placement needs optimization. Move exam rooms closer to waiting area.",
+        title: t("sim.layoutEfficiencyIssue"),
+        description: t("sim.layoutEfficiencyIssueDesc"),
         priority: "high"
       });
     }
@@ -295,8 +295,8 @@ export default function Simulation() {
     if (result.harmonyScore < 70) {
       insights.push({
         icon: Heart,
-        title: "Staff Balance Alert",
-        description: "Staffing ratios may be suboptimal. Check support staff to provider ratio.",
+        title: t("sim.staffBalanceAlert"),
+        description: t("sim.staffBalanceAlertDesc"),
         priority: result.harmonyScore < 60 ? "high" : "medium"
       });
     }
@@ -305,15 +305,15 @@ export default function Simulation() {
     if (capacityUtilization > 90) {
       insights.push({
         icon: Users,
-        title: "Near Capacity",
-        description: "Operating at >90% capacity. Consider expanding or adjusting schedules.",
+        title: t("sim.nearCapacity"),
+        description: t("sim.nearCapacityDesc"),
         priority: "high"
       });
     } else if (capacityUtilization < 50) {
       insights.push({
         icon: Target,
-        title: "Underutilized Capacity",
-        description: `Only ${capacityUtilization.toFixed(0)}% capacity used. Room for growth or cost optimization.`,
+        title: t("sim.underutilized"),
+        description: t("sim.underutilizedDesc", { percent: capacityUtilization.toFixed(0) }),
         priority: "low"
       });
     }
@@ -321,7 +321,7 @@ export default function Simulation() {
     if (analysis?.recommendations && analysis.recommendations.length > 0 && insights.length < 4) {
       insights.push({
         icon: Lightbulb,
-        title: "AI Recommendation",
+        title: t("sim.aiRecommendation"),
         description: analysis.recommendations[0],
         priority: "medium"
       });
@@ -344,10 +344,10 @@ export default function Simulation() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs" data-testid="badge-room-count">
-            {roomCount} {roomCount === 1 ? "Room" : "Rooms"}
+            {roomCount} {roomCount === 1 ? t("rooms.room") : t("rooms.rooms")}
           </Badge>
           <Badge variant="outline" className="text-xs" data-testid="badge-staff-count">
-            {staffCount} Staff
+            {staffCount} {t("common.staff")}
           </Badge>
         </div>
       </div>
@@ -357,10 +357,10 @@ export default function Simulation() {
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              Simulation Results
+              {t("sim.results")}
             </CardTitle>
             <CardDescription>
-              Run a simulation to see how your practice performs with different patient volumes
+              {t("sim.resultsDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -377,8 +377,8 @@ export default function Simulation() {
                     <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
                     <Loader2 className="h-12 w-12 animate-spin text-primary relative" />
                   </div>
-                  <p className="mt-4 text-muted-foreground font-medium">Running simulation...</p>
-                  <p className="text-xs text-muted-foreground mt-1">Analyzing {patientVolume[0]} patients over {operatingHours[0]} hours</p>
+                  <p className="mt-4 text-muted-foreground font-medium">{t("sim.running")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("sim.analyzing", { patients: patientVolume[0], hours: operatingHours[0] })}</p>
                 </motion.div>
               ) : simulationResult ? (
                 <motion.div
@@ -389,8 +389,8 @@ export default function Simulation() {
                   className="space-y-6"
                 >
                   <div className="flex justify-center gap-8 py-4">
-                    <ScoreRing score={simulationResult.efficiencyScore} label="Efficiency" />
-                    <ScoreRing score={simulationResult.harmonyScore} label="Harmony" />
+                    <ScoreRing score={simulationResult.efficiencyScore} label={t("sim.efficiency")} />
+                    <ScoreRing score={simulationResult.harmonyScore} label={t("sim.harmony")} />
                   </div>
 
                   <Separator />
@@ -398,25 +398,25 @@ export default function Simulation() {
                   <div className="grid grid-cols-2 gap-4">
                     <MetricCard
                       icon={Clock}
-                      label="Average Wait Time"
+                      label={t("sim.avgWaitTime")}
                       value={simulationResult.waitTime}
-                      unit="min"
+                      unit={t("common.min")}
                       color="bg-blue-500"
                       status={getWaitTimeStatus(simulationResult.waitTime)}
-                      benchmark="Industry target: <15 min"
+                      benchmark={t("sim.industryTarget")}
                     />
                     <MetricCard
                       icon={Users}
-                      label="Patient Capacity"
+                      label={t("sim.patientCapacity")}
                       value={simulationResult.patientCapacity}
-                      unit="/day"
+                      unit={t("common.perDay")}
                       color="bg-emerald-500"
                       status={simulationResult.patientCapacity >= patientVolume[0] ? "good" : "warning"}
-                      benchmark={`Simulated: ${patientVolume[0]} patients`}
+                      benchmark={t("sim.simulated", { count: patientVolume[0] })}
                     />
                     <MetricCard
                       icon={Activity}
-                      label="Layout Score"
+                      label={t("sim.layoutScore")}
                       value={simulationResult.efficiencyScore.toFixed(1)}
                       unit="%"
                       color="bg-purple-500"
@@ -424,7 +424,7 @@ export default function Simulation() {
                     />
                     <MetricCard
                       icon={Heart}
-                      label="Staff Harmony"
+                      label={t("sim.staffHarmony")}
                       value={simulationResult.harmonyScore.toFixed(1)}
                       unit="%"
                       color="bg-pink-500"
@@ -437,7 +437,7 @@ export default function Simulation() {
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Sparkles className="h-4 w-4 text-amber-500" />
-                      <span className="text-sm font-semibold">AI Insights</span>
+                      <span className="text-sm font-semibold">{t("sim.aiInsights")}</span>
                     </div>
                     <div className="space-y-2">
                       {generateInsights(simulationResult, analysis).map((insight, i) => (
@@ -467,14 +467,14 @@ export default function Simulation() {
                   <div className="w-20 h-20 rounded-full border-4 border-primary/20 flex items-center justify-center mb-4 bg-primary/5">
                     <PlayCircle className="w-10 h-10 text-primary/60" />
                   </div>
-                  <p className="text-muted-foreground font-medium">Ready to Simulate</p>
+                  <p className="text-muted-foreground font-medium">{t("sim.readyToSimulate")}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Configure parameters and click "Run Simulation"
+                    {t("sim.configureParams")}
                   </p>
                   {roomCount === 0 && (
                     <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      Add rooms in Layout Editor for better results
+                      {t("sim.addRoomsHint")}
                     </p>
                   )}
                 </motion.div>
@@ -504,12 +504,12 @@ export default function Simulation() {
                   className="py-2"
                   data-testid="slider-patient-volume"
                 />
-                <p className="text-[10px] text-muted-foreground">Typical: 30-80 patients/day</p>
+                <p className="text-[10px] text-muted-foreground">{t("sim.typical")}</p>
               </div>
 
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="font-medium">Operating Hours</span>
+                  <span className="font-medium">{t("sim.operatingHours")}</span>
                   <span className="text-muted-foreground font-mono">{operatingHours[0]}h</span>
                 </div>
                 <Slider 
@@ -521,7 +521,7 @@ export default function Simulation() {
                   className="py-2"
                   data-testid="slider-operating-hours"
                 />
-                <p className="text-[10px] text-muted-foreground">Standard: 8-10 hours/day</p>
+                <p className="text-[10px] text-muted-foreground">{t("sim.standard")}</p>
               </div>
               
               <div className="pt-2 border-t">
@@ -550,7 +550,7 @@ export default function Simulation() {
                   ) : (
                     <PlayCircle className="h-4 w-4 mr-2" />
                   )}
-                  Run Simulation
+                  {t("sim.runSimulation")}
                 </Button>
                 <Button 
                   variant="outline" 
@@ -574,16 +574,15 @@ export default function Simulation() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-blue-800 font-medium mb-2">
-                "{patientVolume[0]} Patients / {operatingHours[0]}h Day"
+                "{patientVolume[0]} {t("sim.patientVolume")} / {operatingHours[0]}h"
               </p>
               <p className="text-xs text-blue-600">
-                Testing practice efficiency with {patientVolume[0]} patients 
-                over {operatingHours[0]} operating hours.
+                {t("sim.testingEfficiency", { patients: patientVolume[0], hours: operatingHours[0] })}
               </p>
               {analysis && (
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-blue-700">Current Practice Score</span>
+                    <span className="text-blue-700">{t("sim.currentPracticeScore")}</span>
                     <Badge 
                       variant="secondary" 
                       className={cn(

@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 
-function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
+function ScoreRing({ score, size = 120, t }: { score: number; size?: number; t: (key: string) => string }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
   const strokeWidth = 8;
   const radius = (size - strokeWidth) / 2;
@@ -78,7 +78,7 @@ function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
       </svg>
       <div className="text-center z-10">
         <div className="text-3xl font-bold" style={{ color: colors.stroke }}>{safeScore}</div>
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Score</div>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{t("ai.score")}</div>
       </div>
     </div>
   );
@@ -177,26 +177,26 @@ export function GlobalAIPanel() {
 
   const getContextualTitle = () => {
     switch (location) {
-      case "/": return "Practice Overview";
-      case "/editor": return "Layout Analysis";
-      case "/staff": return "Staffing Insights";
-      case "/simulation": return "Simulation Analysis";
-      default: return "AI Insights";
+      case "/": return t("ai.practiceOverview");
+      case "/editor": return t("ai.layoutAnalysis");
+      case "/staff": return t("ai.staffingInsights");
+      case "/simulation": return t("ai.simulationAnalysis");
+      default: return t("ai.aiInsights");
     }
   };
 
   const getContextualTip = () => {
     switch (location) {
       case "/": 
-        return "Your dashboard shows key metrics. Check the scores below to identify areas for improvement.";
+        return t("ai.dashboardTip");
       case "/editor": 
-        return "I'm watching your layout changes. Position rooms strategically for optimal patient flow.";
+        return t("ai.layoutTip");
       case "/staff": 
-        return "Staff balance is key. I'll help you optimize schedules and assignments.";
+        return t("ai.staffTip");
       case "/simulation": 
-        return "Run simulations to test different scenarios. I'll analyze the results.";
+        return t("ai.simulationTip");
       default: 
-        return "I'm here to help optimize your practice.";
+        return t("ai.defaultTip");
     }
   };
 
@@ -246,7 +246,7 @@ export function GlobalAIPanel() {
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm">{getContextualTitle()}</h3>
-              <p className="text-[10px] text-white/70">Powered by AI</p>
+              <p className="text-[10px] text-white/70">{t("ai.poweredByAI")}</p>
             </div>
           </div>
           <div className="flex gap-1">
@@ -286,29 +286,29 @@ export function GlobalAIPanel() {
                 <div className="absolute inset-0 rounded-full bg-purple-500/20 animate-ping" />
                 <Loader2 className="h-8 w-8 animate-spin text-purple-500 relative" />
               </div>
-              <p className="text-xs text-muted-foreground">Analyzing your practice...</p>
+              <p className="text-xs text-muted-foreground">{t("ai.analyzingPractice")}</p>
             </div>
           ) : analysis ? (
             <>
               <div className="flex justify-center py-2">
-                <ScoreRing score={analysis.overallScore ?? 0} />
+                <ScoreRing score={analysis.overallScore ?? 0} t={t} />
               </div>
 
               <div className="space-y-3">
                 <MetricBar 
-                  label="Layout Efficiency" 
+                  label={t("ai.layoutEfficiency")} 
                   value={analysis.efficiencyScore ?? 0} 
                   icon={LayoutGrid} 
                   color="bg-purple-500" 
                 />
                 <MetricBar 
-                  label="Staffing Optimization" 
+                  label={t("ai.staffingOptimization")} 
                   value={analysis.staffingScore ?? 0} 
                   icon={Users} 
                   color="bg-blue-500" 
                 />
                 <MetricBar 
-                  label="Space Utilization" 
+                  label={t("ai.spaceUtilization")} 
                   value={analysis.spaceUtilizationScore ?? 0} 
                   icon={Target} 
                   color="bg-emerald-500" 
@@ -317,7 +317,7 @@ export function GlobalAIPanel() {
 
               <div className="p-3 rounded-xl bg-slate-50 border">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted-foreground">Daily Capacity</span>
+                  <span className="text-xs font-semibold text-muted-foreground">{t("ai.dailyCapacity")}</span>
                   <span className="text-lg font-bold text-foreground">{analysis.capacityAnalysis.estimatedCapacity}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground">{analysis.capacityAnalysis.benchmarkComparison}</p>
@@ -328,7 +328,7 @@ export function GlobalAIPanel() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Zap className="h-4 w-4 text-amber-500" />
-                  <span className="text-xs font-semibold">Priority Actions</span>
+                  <span className="text-xs font-semibold">{t("ai.priorityActions")}</span>
                 </div>
                 <div className="space-y-2">
                   {getPriorityRecommendations().map((rec, i) => (
@@ -342,13 +342,13 @@ export function GlobalAIPanel() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Quick Actions</span>
+                  <span className="text-xs font-semibold">{t("ai.quickActions")}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <QuickAction icon={LayoutDashboard} label="Dashboard" href="/" active={location === "/"} />
-                  <QuickAction icon={PenTool} label="Layout" href="/editor" active={location === "/editor"} />
-                  <QuickAction icon={Users} label="Staff" href="/staff" active={location === "/staff"} />
-                  <QuickAction icon={PlayCircle} label="Simulate" href="/simulation" active={location === "/simulation"} />
+                  <QuickAction icon={LayoutDashboard} label={t("common.dashboard")} href="/" active={location === "/"} />
+                  <QuickAction icon={PenTool} label={t("common.layout")} href="/editor" active={location === "/editor"} />
+                  <QuickAction icon={Users} label={t("common.staff")} href="/staff" active={location === "/staff"} />
+                  <QuickAction icon={PlayCircle} label={t("common.simulate")} href="/simulation" active={location === "/simulation"} />
                 </div>
               </div>
 
@@ -363,9 +363,9 @@ export function GlobalAIPanel() {
           ) : (
             <div className="text-center py-8">
               <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Unable to load analysis</p>
+              <p className="text-sm text-muted-foreground">{t("ai.unableToLoad")}</p>
               <Button variant="link" size="sm" onClick={() => refetch()}>
-                Try again
+                {t("ai.tryAgain")}
               </Button>
             </div>
           )}
@@ -375,11 +375,11 @@ export function GlobalAIPanel() {
       <div className="p-4 border-t bg-white">
         <div className="flex items-center gap-2 mb-2">
           <MessageSquare className="h-4 w-4 text-purple-500" />
-          <span className="text-xs font-semibold">Ask AI</span>
+          <span className="text-xs font-semibold">{t("ai.askAI")}</span>
         </div>
         <div className="flex gap-2">
           <Input
-            placeholder="How can I improve?"
+            placeholder={t("ai.howCanIImprove")}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAsk()}

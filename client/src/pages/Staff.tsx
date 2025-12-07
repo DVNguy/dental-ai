@@ -101,13 +101,15 @@ function RatioCard({
   actual, 
   optimal, 
   score, 
-  recommendation 
+  recommendation,
+  t 
 }: { 
   role: string; 
   actual: number; 
   optimal: number; 
   score: number; 
   recommendation: string;
+  t: (key: string) => string;
 }) {
   const isOptimal = score >= 80;
   const needsAttention = score < 60;
@@ -144,18 +146,18 @@ function RatioCard({
             "bg-yellow-100 text-yellow-700"
           )}
         >
-          {score}% match
+          {score}% {t("staff.match")}
         </Badge>
       </div>
       
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div className="text-center p-2 rounded-lg bg-white/60">
           <div className="text-lg font-bold text-foreground">{actual}</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Current</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.current")}</div>
         </div>
         <div className="text-center p-2 rounded-lg bg-white/60">
           <div className="text-lg font-bold text-primary">{optimal}</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Optimal</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.optimal")}</div>
         </div>
       </div>
       
@@ -164,7 +166,7 @@ function RatioCard({
   );
 }
 
-function StaffingInsightsSkeleton() {
+function StaffingInsightsSkeleton({ t }: { t: (key: string) => string }) {
   return (
     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
       <CardHeader>
@@ -192,36 +194,36 @@ function StaffingInsightsSkeleton() {
   );
 }
 
-const BENCHMARK_RATIOS = [
-  {
-    role: "Support Staff Ratio",
-    actual: 0,
-    optimal: 2.0,
-    score: 0,
-    recommendation: "Optimal ratio is 2.0 support staff per provider (MGMA benchmarks). Add providers and support staff to calculate your actual ratio."
-  },
-  {
-    role: "Nurse to Doctor Ratio",
-    actual: 0,
-    optimal: 1.5,
-    score: 0,
-    recommendation: "Optimal ratio is 1.5 nurses per doctor (American Nurses Association). Add doctors and nurses to calculate your actual ratio."
-  },
-  {
-    role: "Exam Rooms per Provider",
-    actual: 0,
-    optimal: 2.5,
-    score: 0,
-    recommendation: "Optimal ratio is 2-3 exam rooms per provider (ADA standards). Add exam rooms and providers to calculate your actual ratio."
-  }
-];
-
-function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null }) {
+function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | null; t: (key: string) => string }) {
   const staffingAnalysis = analysis?.staffingAnalysis || { overallScore: 0, ratios: {} };
   const staffingScore = analysis?.staffingScore ?? 50;
   const ratioEntries = Object.entries(staffingAnalysis.ratios || {});
   const hasRooms = (analysis?.roomAnalyses?.length ?? 0) > 0;
   const hasRatioData = ratioEntries.length > 0;
+  
+  const BENCHMARK_RATIOS = [
+    {
+      role: "Support Staff Ratio",
+      actual: 0,
+      optimal: 2.0,
+      score: 0,
+      recommendation: "Optimal ratio is 2.0 support staff per provider (MGMA benchmarks). Add providers and support staff to calculate your actual ratio."
+    },
+    {
+      role: "Nurse to Doctor Ratio",
+      actual: 0,
+      optimal: 1.5,
+      score: 0,
+      recommendation: "Optimal ratio is 1.5 nurses per doctor (American Nurses Association). Add doctors and nurses to calculate your actual ratio."
+    },
+    {
+      role: "Exam Rooms per Provider",
+      actual: 0,
+      optimal: 2.5,
+      score: 0,
+      recommendation: "Optimal ratio is 2-3 exam rooms per provider (ADA standards). Add exam rooms and providers to calculate your actual ratio."
+    }
+  ];
   
   const displayRatios = hasRatioData 
     ? ratioEntries.map(([role, data]) => ({ role, ...data }))
@@ -236,17 +238,16 @@ function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">AI Staffing Recommendations</CardTitle>
+              <CardTitle className="text-lg">{t("staff.aiRecommendations")}</CardTitle>
               <CardDescription className="text-blue-100">
-                Optimal staffing ratios based on your practice layout
+                {t("staff.optimalRatios")}
               </CardDescription>
             </div>
           </div>
           <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
             <StaffingScoreRing score={staffingScore} size={60} />
             <div className="text-right">
-              <div className="text-xs text-blue-100">Staffing</div>
-              <div className="text-sm font-semibold">Optimization</div>
+              <div className="text-xs text-blue-100">{t("staff.staffingOptimization")}</div>
             </div>
           </div>
         </div>
@@ -260,11 +261,11 @@ function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null
           >
             <Lightbulb className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-blue-800 mb-1">Industry Benchmark Targets</p>
+              <p className="text-sm font-medium text-blue-800 mb-1">{t("staff.industryBenchmarks")}</p>
               <p className="text-xs text-blue-700">
                 {!hasRooms 
-                  ? "Add rooms to your layout and staff to your team to see personalized recommendations"
-                  : "Add staff members with roles (Doctor, Nurse, Receptionist) to calculate your actual staffing ratios"
+                  ? t("staff.addRoomsHint")
+                  : t("staff.addStaffHint")
                 }
               </p>
             </div>
@@ -280,6 +281,7 @@ function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null
               optimal={data.optimal}
               score={data.score}
               recommendation={data.recommendation}
+              t={t}
             />
           ))}
         </div>
@@ -293,10 +295,9 @@ function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null
           >
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-amber-800 mb-1">Staffing Optimization Needed</p>
+              <p className="text-sm font-medium text-amber-800 mb-1">{t("staff.optimizationNeeded")}</p>
               <p className="text-xs text-amber-700">
-                Your current staffing levels are below optimal for your practice layout. 
-                Consider the recommendations above to improve patient flow and reduce wait times.
+                {t("staff.optimizationNeededDesc")}
               </p>
             </div>
           </motion.div>
@@ -311,10 +312,9 @@ function StaffingInsightsSection({ analysis }: { analysis: LayoutAnalysis | null
           >
             <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-green-800 mb-1">Excellent Staffing Balance</p>
+              <p className="text-sm font-medium text-green-800 mb-1">{t("staff.excellentBalance")}</p>
               <p className="text-xs text-green-700">
-                Your staffing levels are well-optimized for your current practice layout. 
-                Continue monitoring as your practice grows.
+                {t("staff.excellentBalanceDesc")}
               </p>
             </div>
           </motion.div>
@@ -349,18 +349,18 @@ export default function Staff() {
 
       <div className="mb-8">
         {isLoading ? (
-          <StaffingInsightsSkeleton />
+          <StaffingInsightsSkeleton t={t} />
         ) : (
-          <StaffingInsightsSection analysis={analysis ?? null} />
+          <StaffingInsightsSection analysis={analysis ?? null} t={t} />
         )}
       </div>
 
       <div className="mb-6">
         <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          Current Team
+          {t("staff.currentTeam")}
         </h3>
-        <p className="text-sm text-muted-foreground">Manage your practice staff members</p>
+        <p className="text-sm text-muted-foreground">{t("staff.manageStaff")}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">

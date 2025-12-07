@@ -11,7 +11,7 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-function AIHealthScore({ score, isLoading }: { score: number; isLoading: boolean }) {
+function AIHealthScore({ score, isLoading, t }: { score: number; isLoading: boolean; t: (key: string) => string }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
   const strokeWidth = 10;
   const size = 140;
@@ -20,9 +20,9 @@ function AIHealthScore({ score, isLoading }: { score: number; isLoading: boolean
   const offset = circumference - (safeScore / 100) * circumference;
   
   const getColor = (s: number) => {
-    if (s >= 80) return { stroke: "#22c55e", text: "text-green-600", bg: "from-green-500/20 to-green-500/5", badge: "bg-green-100", label: "Excellent" };
-    if (s >= 60) return { stroke: "#eab308", text: "text-yellow-600", bg: "from-yellow-500/20 to-yellow-500/5", badge: "bg-yellow-100", label: "Good" };
-    return { stroke: "#ef4444", text: "text-red-600", bg: "from-red-500/20 to-red-500/5", badge: "bg-red-100", label: "Needs Work" };
+    if (s >= 80) return { stroke: "#22c55e", text: "text-green-600", bg: "from-green-500/20 to-green-500/5", badge: "bg-green-100", label: t("dashboard.excellent") };
+    if (s >= 60) return { stroke: "#eab308", text: "text-yellow-600", bg: "from-yellow-500/20 to-yellow-500/5", badge: "bg-yellow-100", label: t("dashboard.good") };
+    return { stroke: "#ef4444", text: "text-red-600", bg: "from-red-500/20 to-red-500/5", badge: "bg-red-100", label: t("dashboard.needsWork") };
   };
   
   const colors = getColor(safeScore);
@@ -31,7 +31,7 @@ function AIHealthScore({ score, isLoading }: { score: number; isLoading: boolean
     return (
       <div className="flex flex-col items-center justify-center py-8">
         <Loader2 className="h-12 w-12 animate-spin text-purple-500" />
-        <p className="mt-3 text-sm text-muted-foreground">Analyzing practice...</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("dashboard.analyzing")}</p>
       </div>
     );
   }
@@ -71,7 +71,7 @@ function AIHealthScore({ score, isLoading }: { score: number; isLoading: boolean
           >
             {safeScore}
           </motion.div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Health Score</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{t("dashboard.healthScore")}</div>
         </div>
       </div>
       <motion.div 
@@ -227,12 +227,12 @@ export default function Dashboard() {
                 <Brain className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">AI Practice Health</h3>
-                <p className="text-xs text-muted-foreground">Powered by advanced analytics</p>
+                <h3 className="font-semibold text-foreground">{t("dashboard.aiPracticeHealth")}</h3>
+                <p className="text-xs text-muted-foreground">{t("dashboard.poweredByAI")}</p>
               </div>
             </div>
             
-            <AIHealthScore score={analysis?.overallScore ?? 0} isLoading={isLoading} />
+            <AIHealthScore score={analysis?.overallScore ?? 0} isLoading={isLoading} t={t} />
             
             {analysis && (
               <motion.div 
@@ -242,7 +242,7 @@ export default function Dashboard() {
                 transition={{ delay: 0.6 }}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted-foreground">Est. Daily Capacity</span>
+                  <span className="text-xs font-semibold text-muted-foreground">{t("dashboard.estDailyCapacity")}</span>
                   <span className="text-xl font-bold text-foreground" data-testid="text-daily-capacity">{analysis.capacityAnalysis.estimatedCapacity}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">{analysis.capacityAnalysis.benchmarkComparison}</p>
@@ -260,19 +260,19 @@ export default function Dashboard() {
             ) : (
               <>
                 <MetricCard 
-                  label="Layout Efficiency" 
+                  label={t("dashboard.layoutEfficiency")} 
                   value={analysis?.efficiencyScore ?? 0} 
                   icon={LayoutGrid} 
                   color="bg-purple-500"
                 />
                 <MetricCard 
-                  label="Staff Optimization" 
+                  label={t("dashboard.staffOptimization")} 
                   value={analysis?.staffingScore ?? 0} 
                   icon={Users} 
                   color="bg-blue-500"
                 />
                 <MetricCard 
-                  label="Space Utilization" 
+                  label={t("dashboard.spaceUtilization")} 
                   value={analysis?.spaceUtilizationScore ?? 0} 
                   icon={Target} 
                   color="bg-emerald-500"
@@ -295,13 +295,13 @@ export default function Dashboard() {
                   <Zap className="h-4 w-4 text-amber-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground">Priority Actions</h3>
-                  <p className="text-xs text-muted-foreground">AI-recommended improvements</p>
+                  <h3 className="font-semibold text-foreground">{t("dashboard.priorityActions")}</h3>
+                  <p className="text-xs text-muted-foreground">{t("dashboard.aiRecommendedImprovements")}</p>
                 </div>
               </div>
               <Link href="/editor">
                 <Button variant="outline" size="sm" className="text-xs" data-testid="button-view-layout">
-                  Open Layout Editor
+                  {t("dashboard.openLayoutEditor")}
                   <ArrowRight className="ml-2 h-3 w-3" />
                 </Button>
               </Link>
@@ -347,7 +347,7 @@ export default function Dashboard() {
                 <Brain className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground mb-2">AI Insights</h3>
+                <h3 className="font-semibold text-foreground mb-2">{t("dashboard.aiInsights")}</h3>
                 <p className="text-sm text-slate-600 leading-relaxed" data-testid="text-dashboard-ai-insights">
                   {analysis.aiInsights}
                 </p>
