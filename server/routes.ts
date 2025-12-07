@@ -7,6 +7,8 @@ import {
   insertStaffSchema, 
   insertSimulationSchema 
 } from "@shared/schema";
+import { runSimulation, type SimulationParameters } from "./simulation";
+import { z } from "zod";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -159,6 +161,45 @@ export async function registerRoutes(
       res.json(simulations);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch simulations" });
+    }
+  });
+
+  const runSimulationSchema = z.object({
+    practiceId: z.string(),
+    patientVolume: z.number().min(1).max(1000),
+    operatingHours: z.number().min(1).max(24),
+  });
+
+  app.post("/api/simulations/run", async (req, res) => {
+    try {
+      const { practiceId, patientVolume, operatingHours } = runSimulationSchema.parse(req.body);
+      
+      const practice = await storage.getPractice(practiceId);
+      if (!practice) {
+        return res.status(404).json({ error: "Practice not found" });
+      }
+
+      const rooms = await storage.getRoomsByPracticeId(practiceId);
+      const staff = await storage.getStaffByPracticeId(practiceId);
+
+      const parameters: SimulationParameters = { patientVolume, operatingHours };
+      const result = runSimulation(rooms, staff, parameters);
+
+      const simulation = await storage.createSimulation({
+        practiceId,
+        efficiencyScore: result.efficiencyScore,
+        harmonyScore: result.harmonyScore,
+        waitTime: result.waitTime,
+        patientCapacity: result.patientCapacity,
+        parameters: result.parameters,
+      });
+
+      res.json(simulation);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid simulation parameters" });
+      }
+      res.status(500).json({ error: "Failed to run simulation" });
     }
   });
 
