@@ -1,41 +1,31 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Save, Undo, Info, Trash2, RotateCw, Move, X, Settings2, GripHorizontal, DollarSign } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2 } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
 import type { Room } from "@shared/schema";
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const { practiceId, practice } = usePractice();
+  const { practiceId } = usePractice();
   const queryClient = useQueryClient();
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [budget, setBudget] = useState(50000);
-
-  useEffect(() => {
-    if (practice) {
-      setBudget(practice.budget);
-    }
-  }, [practice]);
   
   const ROOM_TYPES = [
-    { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100, cost: 2500 },
-    { id: "waiting", label: t("rooms.waiting"), color: "bg-green-100 border-green-300", w: 200, h: 150, cost: 1500 },
-    { id: "exam", label: t("rooms.exam"), color: "bg-white border-gray-300", w: 120, h: 120, cost: 5000 },
-    { id: "lab", label: t("rooms.lab"), color: "bg-purple-100 border-purple-300", w: 100, h: 100, cost: 8000 },
-    { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 120, h: 120, cost: 3000 },
+    { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100 },
+    { id: "waiting", label: t("rooms.waiting"), color: "bg-green-100 border-green-300", w: 200, h: 150 },
+    { id: "exam", label: t("rooms.exam"), color: "bg-white border-gray-300", w: 120, h: 120 },
+    { id: "lab", label: t("rooms.lab"), color: "bg-purple-100 border-purple-300", w: 100, h: 100 },
+    { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 120, h: 120 },
   ];
 
   const { data: rooms = [] } = useQuery({
@@ -69,29 +59,9 @@ export default function LayoutEditor() {
     },
   });
 
-  const updateBudgetMutation = useMutation({
-    mutationFn: (newBudget: number) => api.practices.updateBudget(practiceId!, newBudget),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["practice", practiceId] });
-    },
-  });
-
   const addRoom = (typeId: string) => {
     const typeDef = ROOM_TYPES.find(t => t.id === typeId);
     if (!typeDef) return;
-    
-    if (budget < typeDef.cost) {
-      toast({
-        title: "Insufficient Budget",
-        description: `You need $${typeDef.cost} to add this room.`,
-        variant: "destructive",
-      });
-      return; 
-    }
-
-    const newBudget = budget - typeDef.cost;
-    setBudget(newBudget);
-    updateBudgetMutation.mutate(newBudget);
 
     createRoomMutation.mutate({ 
       type: typeId,
@@ -108,17 +78,13 @@ export default function LayoutEditor() {
   };
 
   const deleteRoom = (id: string) => {
-    const room = rooms.find(r => r.id === id);
-    if (room) {
-      const typeDef = ROOM_TYPES.find(t => t.id === room.type);
-      if (typeDef) {
-        const refund = typeDef.cost * 0.8;
-        const newBudget = budget + refund;
-        setBudget(newBudget);
-        updateBudgetMutation.mutate(newBudget);
-      }
-    }
     deleteRoomMutation.mutate(id);
+  };
+
+  const clearAllRooms = () => {
+    rooms.forEach(room => {
+      deleteRoomMutation.mutate(room.id);
+    });
   };
 
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
@@ -135,17 +101,10 @@ export default function LayoutEditor() {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="mr-4 px-3 py-1 bg-primary/10 text-primary rounded-md font-bold" data-testid="budget-display">
-              ${budget?.toLocaleString() || "0"}
-            </div>
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => { 
-                const newBudget = 50000;
-                setBudget(newBudget);
-                updateBudgetMutation.mutate(newBudget);
-              }}
+              onClick={clearAllRooms}
               data-testid="button-reset"
             >
               <Undo className="mr-2 h-4 w-4" /> {t("layout.reset")}
@@ -154,7 +113,6 @@ export default function LayoutEditor() {
         </header>
 
         <div className="flex-1 flex overflow-hidden relative">
-          {/* Modern Palette Sidebar */}
           <div className="w-64 border-r bg-card flex flex-col z-10 shadow-lg">
             <div className="p-4 border-b bg-muted/10">
               <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -168,11 +126,7 @@ export default function LayoutEditor() {
                 <button
                   key={room.id}
                   onClick={() => addRoom(room.id)}
-                  disabled={budget < room.cost}
-                  className={cn(
-                    "w-full group flex items-center gap-3 p-3 rounded-xl border-2 border-transparent transition-all duration-200 text-left relative overflow-hidden",
-                    budget < room.cost ? "opacity-50 cursor-not-allowed grayscale" : "hover:border-primary/20 hover:bg-accent hover:shadow-md active:scale-95"
-                  )}
+                  className="w-full group flex items-center gap-3 p-3 rounded-xl border-2 border-transparent transition-all duration-200 text-left relative overflow-hidden hover:border-primary/20 hover:bg-accent hover:shadow-md active:scale-95"
                   data-testid={`button-add-room-${room.id}`}
                 >
                   <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-110", room.color)}>
@@ -182,7 +136,6 @@ export default function LayoutEditor() {
                     <div className="text-sm font-bold leading-none truncate text-foreground/90">{room.label}</div>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-muted-foreground font-medium">{room.w}x{room.h}px</span>
-                      <span className="text-[10px] text-green-600 font-bold">${room.cost}</span>
                     </div>
                   </div>
                 </button>
@@ -204,14 +157,12 @@ export default function LayoutEditor() {
             </div>
           </div>
 
-          {/* Canvas */}
           <div 
             className="flex-1 bg-[#F0F4F8] relative overflow-hidden cursor-grab active:cursor-grabbing"
             onClick={(e) => {
               if (e.target === e.currentTarget) setSelectedRoomId(null);
             }}
           >
-            {/* Grid Pattern */}
             <div 
               className="absolute inset-0 pointer-events-none opacity-[0.03]"
               style={{
@@ -283,7 +234,6 @@ export default function LayoutEditor() {
             </AnimatePresence>
           </div>
 
-          {/* Draggable Inspector Panel */}
           <AnimatePresence>
             {selectedRoom && (
               <motion.div
@@ -295,7 +245,6 @@ export default function LayoutEditor() {
                 exit={{ opacity: 0, scale: 0.9, y: 10 }}
                 className="absolute top-8 right-8 w-80 bg-background/90 backdrop-blur-md shadow-2xl rounded-2xl border border-border/50 z-50 overflow-hidden"
               >
-                {/* Drag Handle */}
                 <div className="h-8 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-center border-b">
                     <div className="w-12 h-1 rounded-full bg-foreground/10" />
                 </div>
@@ -317,7 +266,6 @@ export default function LayoutEditor() {
                   </div>
 
                   <div className="space-y-5">
-                    {/* Rename Input */}
                     <div className="space-y-2">
                         <Label htmlFor="roomName" className="text-xs font-bold uppercase text-muted-foreground">{t("editor.roomName")}</Label>
                         <Input 
@@ -332,7 +280,6 @@ export default function LayoutEditor() {
 
                     <Separator className="bg-border/50" />
 
-                    {/* Dimensions */}
                     <div className="space-y-4">
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
@@ -367,7 +314,6 @@ export default function LayoutEditor() {
 
                     <Separator className="bg-border/50" />
 
-                    {/* Actions */}
                     <div className="grid grid-cols-2 gap-3">
                        <Button 
                         variant="outline" 
