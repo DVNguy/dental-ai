@@ -82,12 +82,6 @@ export default function LayoutEditor() {
             <p className="text-sm text-muted-foreground">{t("layout.subtitle")}</p>
           </div>
           
-          {/* Game-like Budget Indicator */}
-          <div className="bg-slate-900 text-green-400 px-4 py-1.5 rounded-full font-mono font-bold flex items-center gap-2 shadow-inner border border-slate-700">
-            <DollarSign className="w-4 h-4" />
-            {budget.toLocaleString()}
-          </div>
-
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => { setRooms([]); setBudget(50000); }}>
               <Undo className="mr-2 h-4 w-4" /> {t("layout.reset")}
@@ -126,7 +120,6 @@ export default function LayoutEditor() {
                     <div className="text-sm font-bold leading-none truncate text-foreground/90">{room.label}</div>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-[10px] text-muted-foreground font-medium">{room.w}x{room.h}px</span>
-                      <span className="text-[10px] font-mono text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-full">${room.cost}</span>
                     </div>
                   </div>
                 </button>
