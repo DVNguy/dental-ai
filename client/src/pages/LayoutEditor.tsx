@@ -74,7 +74,7 @@ export default function LayoutEditor() {
           </div>
         </header>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
           {/* Modern Palette Sidebar */}
           <div className="w-64 border-r bg-card flex flex-col z-10">
             <div className="p-4 border-b">
@@ -179,28 +179,34 @@ export default function LayoutEditor() {
             </AnimatePresence>
           </div>
 
-          {/* Inspector Panel (Right Sidebar) */}
-          <div className="w-80 border-l bg-card flex flex-col z-10 shadow-lg">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Settings2 className="w-4 h-4" />
-                {t("editor.properties")}
-              </h3>
-              {selectedRoomId && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedRoomId(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+          {/* Floating Inspector Panel */}
+          <AnimatePresence>
+            {selectedRoom && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="absolute top-4 right-4 w-72 bg-card/95 backdrop-blur shadow-2xl rounded-xl border z-50 overflow-hidden"
+              >
+                <div className="p-4 border-b flex items-center justify-between bg-muted/30">
+                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Settings2 className="w-4 h-4" />
+                    {t("editor.properties")}
+                  </h3>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-destructive/10 hover:text-destructive" onClick={() => setSelectedRoomId(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              {selectedRoom ? (
-                <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                  
+                <div className="p-4 space-y-6">
                   {/* Header */}
-                  <div className="space-y-1">
-                    <h4 className="text-lg font-semibold tracking-tight">{selectedRoomType?.label}</h4>
-                    <p className="text-sm text-muted-foreground font-mono">ID: {selectedRoom.id}</p>
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-10 h-10 rounded-md shadow-sm border", ROOM_TYPES.find(t => t.id === selectedRoom.type)?.color)}></div>
+                    <div>
+                      <h4 className="font-semibold tracking-tight">{selectedRoomType?.label}</h4>
+                      <p className="text-xs text-muted-foreground font-mono">ID: {selectedRoom.id}</p>
+                    </div>
                   </div>
 
                   <Separator />
@@ -209,8 +215,8 @@ export default function LayoutEditor() {
                   <div className="space-y-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <Label>{t("editor.width")}</Label>
-                        <span className="text-xs text-muted-foreground">{selectedRoom.w}px</span>
+                        <Label className="text-xs font-medium uppercase text-muted-foreground">{t("editor.width")}</Label>
+                        <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{selectedRoom.w}px</span>
                       </div>
                       <Slider 
                         value={[selectedRoom.w]} 
@@ -218,13 +224,14 @@ export default function LayoutEditor() {
                         max={400} 
                         step={10} 
                         onValueChange={([val]) => updateRoom(selectedRoom.id, { w: val })}
+                        className="py-1"
                       />
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <Label>{t("editor.height")}</Label>
-                        <span className="text-xs text-muted-foreground">{selectedRoom.h}px</span>
+                         <Label className="text-xs font-medium uppercase text-muted-foreground">{t("editor.height")}</Label>
+                        <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{selectedRoom.h}px</span>
                       </div>
                       <Slider 
                         value={[selectedRoom.h]} 
@@ -232,6 +239,7 @@ export default function LayoutEditor() {
                         max={400} 
                         step={10} 
                         onValueChange={([val]) => updateRoom(selectedRoom.id, { h: val })}
+                        className="py-1"
                       />
                     </div>
                   </div>
@@ -242,29 +250,25 @@ export default function LayoutEditor() {
                   <div className="grid grid-cols-2 gap-3">
                      <Button 
                       variant="outline" 
+                      size="sm"
                       onClick={() => updateRoom(selectedRoom.id, { w: selectedRoom.h, h: selectedRoom.w })}
                     >
-                      <RotateCw className="mr-2 h-4 w-4" />
+                      <RotateCw className="mr-2 h-3.5 w-3.5" />
                       {t("editor.rotate")}
                     </Button>
                     <Button 
                       variant="destructive" 
+                      size="sm"
                       onClick={() => deleteRoom(selectedRoom.id)}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />
                       {t("editor.delete")}
                     </Button>
                   </div>
-
                 </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 text-muted-foreground opacity-50">
-                  <Move className="h-12 w-12 stroke-1" />
-                  <p>{t("editor.noSelection")}</p>
-                </div>
-              )}
-            </div>
-          </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         </div>
       </main>
