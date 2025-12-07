@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Slider } from "@/components/ui/slider";
 import { PlayCircle, PauseCircle, FastForward, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function Simulation() {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState([1]);
   const [patientVolume, setPatientVolume] = useState([50]);
@@ -16,8 +18,8 @@ export default function Simulation() {
       <main className="flex-1 overflow-y-auto p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">Scenario Simulation</h2>
-            <p className="text-muted-foreground">Run complex scenarios to test efficiency and harmony under pressure.</p>
+            <h2 className="text-3xl font-bold tracking-tight text-primary">{t("sim.title")}</h2>
+            <p className="text-muted-foreground">{t("sim.subtitle")}</p>
           </div>
         </div>
 
@@ -29,7 +31,7 @@ export default function Simulation() {
                     <div className="w-24 h-24 rounded-full border-4 border-primary/30 flex items-center justify-center mx-auto animate-pulse">
                         <PlayCircle className="w-12 h-12 text-primary" />
                     </div>
-                    <p className="text-slate-400">Simulation Engine Ready</p>
+                    <p className="text-slate-400">{t("sim.engineReady")}</p>
                 </div>
             </div>
             
@@ -59,13 +61,13 @@ export default function Simulation() {
           <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Simulation Parameters</CardTitle>
-                    <CardDescription>Adjust variables in real-time</CardDescription>
+                    <CardTitle>{t("sim.params")}</CardTitle>
+                    <CardDescription>{t("sim.paramsDesc")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
                         <div className="flex justify-between text-sm">
-                            <span className="font-medium">Patient Volume</span>
+                            <span className="font-medium">{t("sim.patientVolume")}</span>
                             <span className="text-muted-foreground">{patientVolume}%</span>
                         </div>
                         <Slider 
@@ -79,7 +81,7 @@ export default function Simulation() {
 
                     <div className="space-y-2">
                         <div className="flex justify-between text-sm">
-                            <span className="font-medium">Simulation Speed</span>
+                            <span className="font-medium">{t("sim.speed")}</span>
                             <span className="text-muted-foreground">{speed}x</span>
                         </div>
                         <Slider 
@@ -94,22 +96,22 @@ export default function Simulation() {
                     
                     <div className="pt-4 border-t">
                         <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm font-medium">Random Events</span>
+                            <span className="text-sm font-medium">{t("sim.randomEvents")}</span>
                             <Switch checked />
                         </div>
-                        <p className="text-xs text-muted-foreground">Includes staff sickness, emergency walk-ins, and equipment failure.</p>
+                        <p className="text-xs text-muted-foreground">{t("sim.randomEventsDesc")}</p>
                     </div>
                 </CardContent>
             </Card>
 
             <Card className="bg-blue-50 border-blue-100">
                 <CardHeader>
-                    <CardTitle className="text-blue-900 text-base">Active Scenario</CardTitle>
+                    <CardTitle className="text-blue-900 text-base">{t("sim.activeScenario")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-blue-800 mb-2 font-medium">"Flu Season Peak"</p>
+                    <p className="text-sm text-blue-800 mb-2 font-medium">"{t("sim.scenarioName")}"</p>
                     <p className="text-xs text-blue-600">
-                        High patient influx with respiratory symptoms. Staff stress accumulation increased by 20%.
+                        {t("sim.scenarioDesc")}
                     </p>
                 </CardContent>
             </Card>

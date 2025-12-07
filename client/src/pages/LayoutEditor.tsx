@@ -4,17 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { Plus, Save, Undo, Info } from "lucide-react";
 import { useState } from "react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
-const ROOM_TYPES = [
-  { id: "reception", label: "Reception", color: "bg-blue-100 border-blue-300", w: 150, h: 100 },
-  { id: "waiting", label: "Waiting Room", color: "bg-green-100 border-green-300", w: 200, h: 150 },
-  { id: "exam", label: "Exam Room", color: "bg-white border-gray-300", w: 120, h: 120 },
-  { id: "lab", label: "Laboratory", color: "bg-purple-100 border-purple-300", w: 100, h: 100 },
-  { id: "office", label: "Doctor Office", color: "bg-orange-100 border-orange-300", w: 120, h: 120 },
-];
+import { useTranslation } from "react-i18next";
 
 export default function LayoutEditor() {
+  const { t } = useTranslation();
+  
+  const ROOM_TYPES = [
+    { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100 },
+    { id: "waiting", label: t("rooms.waiting"), color: "bg-green-100 border-green-300", w: 200, h: 150 },
+    { id: "exam", label: t("rooms.exam"), color: "bg-white border-gray-300", w: 120, h: 120 },
+    { id: "lab", label: t("rooms.lab"), color: "bg-purple-100 border-purple-300", w: 100, h: 100 },
+    { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 120, h: 120 },
+  ];
+
   const [rooms, setRooms] = useState([
     { id: 1, type: "reception", x: 50, y: 50 },
     { id: 2, type: "waiting", x: 250, y: 50 },
@@ -31,15 +33,15 @@ export default function LayoutEditor() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-16 border-b flex items-center justify-between px-8 bg-card z-10">
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-primary">Practice Layout Editor</h2>
-            <p className="text-sm text-muted-foreground">Drag and drop to optimize patient flow.</p>
+            <h2 className="text-xl font-bold tracking-tight text-primary">{t("layout.title")}</h2>
+            <p className="text-sm text-muted-foreground">{t("layout.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
-              <Undo className="mr-2 h-4 w-4" /> Reset
+              <Undo className="mr-2 h-4 w-4" /> {t("layout.reset")}
             </Button>
             <Button size="sm" className="bg-primary text-white">
-              <Save className="mr-2 h-4 w-4" /> Save Layout
+              <Save className="mr-2 h-4 w-4" /> {t("layout.save")}
             </Button>
           </div>
         </header>
@@ -47,7 +49,7 @@ export default function LayoutEditor() {
         <div className="flex-1 flex overflow-hidden">
           {/* Palette Sidebar */}
           <div className="w-64 border-r bg-muted/30 p-4 overflow-y-auto">
-            <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Room Types</h3>
+            <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">{t("layout.roomTypes")}</h3>
             <div className="space-y-3">
               {ROOM_TYPES.map((room) => (
                 <Card 
@@ -66,10 +68,10 @@ export default function LayoutEditor() {
             <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
               <div className="flex items-center gap-2 text-blue-800 mb-2">
                 <Info className="h-4 w-4" />
-                <span className="font-medium text-xs">Optimization Tip</span>
+                <span className="font-medium text-xs">{t("layout.tipTitle")}</span>
               </div>
               <p className="text-xs text-blue-600 leading-relaxed">
-                Placing the Waiting Room closer to Exam Rooms increases Efficiency Score by reducing patient travel time.
+                {t("layout.tipText")}
               </p>
             </div>
           </div>

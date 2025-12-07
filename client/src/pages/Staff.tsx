@@ -1,11 +1,11 @@
 import { Sidebar } from "@/components/layout/Sidebar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Plus, Star, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const STAFF = [
   { 
@@ -47,17 +47,19 @@ const STAFF = [
 ];
 
 export default function Staff() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
       <main className="flex-1 overflow-y-auto p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">Staff Management</h2>
-            <p className="text-muted-foreground">Monitor stress levels and assign roles to optimize harmony.</p>
+            <h2 className="text-3xl font-bold tracking-tight text-primary">{t("staff.title")}</h2>
+            <p className="text-muted-foreground">{t("staff.subtitle")}</p>
           </div>
           <Button className="bg-primary hover:bg-primary/90">
-            <Plus className="mr-2 h-4 w-4" /> Add Staff Member
+            <Plus className="mr-2 h-4 w-4" /> {t("staff.add")}
           </Button>
         </div>
 
@@ -86,7 +88,7 @@ export default function Staff() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Zap className="w-3 h-3" /> Efficiency
+                        <Zap className="w-3 h-3" /> {t("staff.efficiency")}
                       </span>
                       <span className="font-medium">{member.efficiency}%</span>
                     </div>
@@ -96,7 +98,7 @@ export default function Staff() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Star className="w-3 h-3" /> Stress Level
+                        <Star className="w-3 h-3" /> {t("staff.stress")}
                       </span>
                       <span className={member.stress > 70 ? "text-destructive font-bold" : "font-medium"}>
                         {member.stress}%

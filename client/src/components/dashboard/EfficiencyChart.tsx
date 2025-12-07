@@ -1,5 +1,6 @@
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTranslation } from "react-i18next";
 
 const data = [
   { time: "08:00", efficiency: 65, harmony: 80 },
@@ -15,10 +16,11 @@ const data = [
 ];
 
 export function EfficiencyChart() {
+  const { t } = useTranslation();
   return (
     <Card className="col-span-4">
       <CardHeader>
-        <CardTitle>Daily Performance Metrics</CardTitle>
+        <CardTitle>{t("chart.title")}</CardTitle>
       </CardHeader>
       <CardContent className="pl-2">
         <ResponsiveContainer width="100%" height={350}>
@@ -41,8 +43,8 @@ export function EfficiencyChart() {
               labelStyle={{ color: 'hsl(var(--foreground))' }}
             />
             <Legend />
-            <Area type="monotone" dataKey="efficiency" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorEfficiency)" name="Efficiency Index" strokeWidth={2} />
-            <Area type="monotone" dataKey="harmony" stroke="hsl(var(--secondary))" fillOpacity={1} fill="url(#colorHarmony)" name="Harmony Score" strokeWidth={2} />
+            <Area type="monotone" dataKey="efficiency" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorEfficiency)" name={t("chart.efficiency")} strokeWidth={2} />
+            <Area type="monotone" dataKey="harmony" stroke="hsl(var(--secondary))" fillOpacity={1} fill="url(#colorHarmony)" name={t("chart.harmony")} strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>
