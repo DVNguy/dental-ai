@@ -327,7 +327,7 @@ export default function Dashboard() {
             <div className="flex-1 relative bg-muted/20 min-h-[200px]">
               <img 
                 src={medicalHero} 
-                alt="Simulation View" 
+                alt={t("images.simulationView")} 
                 className="absolute inset-0 h-full w-full object-cover opacity-90 hover:opacity-100 transition-opacity duration-500"
               />
               <div className="absolute inset-0 bg-linear-to-t from-background/50 to-transparent pointer-events-none" />

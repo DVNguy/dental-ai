@@ -168,7 +168,28 @@ const resources = {
       "common.staff": "Staff",
       "common.simulate": "Simulate",
       "common.min": "min",
-      "common.perDay": "/day"
+      "common.perDay": "/day",
+      
+      "roles.generalPractitioner": "General Practitioner",
+      "roles.specialist": "Specialist",
+      "roles.nurse": "Nurse",
+      "roles.receptionist": "Receptionist",
+      
+      "traits.empathetic": "Empathetic",
+      "traits.fast": "Fast",
+      "traits.detailOriented": "Detail-oriented",
+      "traits.multitasker": "Multitasker",
+      "traits.friendly": "Friendly",
+      "traits.organized": "Organized",
+      
+      "benchmarks.supportStaffRatio": "Support Staff Ratio",
+      "benchmarks.supportStaffDesc": "Optimal ratio is 2.0 support staff per provider (MGMA benchmarks). Add providers and support staff to calculate your actual ratio.",
+      "benchmarks.nurseToDoctor": "Nurse to Doctor Ratio",
+      "benchmarks.nurseToDoctorDesc": "Optimal ratio is 1.5 nurses per doctor (American Nurses Association). Add doctors and nurses to calculate your actual ratio.",
+      "benchmarks.examRoomsPerProvider": "Exam Rooms per Provider",
+      "benchmarks.examRoomsPerProviderDesc": "Optimal ratio is 2-3 exam rooms per provider (ADA standards). Add exam rooms and providers to calculate your actual ratio.",
+      
+      "images.simulationView": "Simulation View"
     }
   },
   de: {
@@ -337,7 +358,28 @@ const resources = {
       "common.staff": "Personal",
       "common.simulate": "Simulieren",
       "common.min": "Min",
-      "common.perDay": "/Tag"
+      "common.perDay": "/Tag",
+      
+      "roles.generalPractitioner": "Allgemeinmediziner/in",
+      "roles.specialist": "Facharzt/Fachärztin",
+      "roles.nurse": "Pflegefachkraft",
+      "roles.receptionist": "Empfangskraft",
+      
+      "traits.empathetic": "Einfühlsam",
+      "traits.fast": "Schnell",
+      "traits.detailOriented": "Detailgenau",
+      "traits.multitasker": "Multitasking-Talent",
+      "traits.friendly": "Freundlich",
+      "traits.organized": "Gut organisiert",
+      
+      "benchmarks.supportStaffRatio": "Unterstützungspersonal-Verhältnis",
+      "benchmarks.supportStaffDesc": "Optimales Verhältnis ist 2,0 Hilfspersonal pro Arzt (MGMA-Richtwerte). Fügen Sie Ärzte und Hilfspersonal hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
+      "benchmarks.nurseToDoctor": "Krankenschwester-Arzt-Verhältnis",
+      "benchmarks.nurseToDoctorDesc": "Optimales Verhältnis ist 1,5 Krankenschwestern pro Arzt (American Nurses Association). Fügen Sie Ärzte und Krankenschwestern hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
+      "benchmarks.examRoomsPerProvider": "Behandlungsräume pro Arzt",
+      "benchmarks.examRoomsPerProviderDesc": "Optimales Verhältnis ist 2-3 Behandlungsräume pro Arzt (ADA-Standards). Fügen Sie Behandlungsräume und Ärzte hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
+      
+      "images.simulationView": "Simulationsansicht"
     }
   }
 };

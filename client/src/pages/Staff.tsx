@@ -12,42 +12,42 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-const STAFF = [
+const STAFF_DATA = [
   { 
     id: 1, 
     name: "Dr. Sarah Weber", 
-    role: "General Practitioner", 
+    roleKey: "roles.generalPractitioner", 
     stress: 25, 
     efficiency: 95, 
     avatar: "SW",
-    traits: ["Empathetic", "Fast"]
+    traitKeys: ["traits.empathetic", "traits.fast"]
   },
   { 
     id: 2, 
     name: "Dr. James Chen", 
-    role: "Specialist", 
+    roleKey: "roles.specialist", 
     stress: 65, 
     efficiency: 88, 
     avatar: "JC",
-    traits: ["Detail-oriented"]
+    traitKeys: ["traits.detailOriented"]
   },
   { 
     id: 3, 
     name: "Maria Rodriguez", 
-    role: "Nurse", 
+    roleKey: "roles.nurse", 
     stress: 40, 
     efficiency: 92, 
     avatar: "MR",
-    traits: ["Multitasker", "Friendly"]
+    traitKeys: ["traits.multitasker", "traits.friendly"]
   },
   { 
     id: 4, 
     name: "David Kim", 
-    role: "Receptionist", 
+    roleKey: "roles.receptionist", 
     stress: 80, 
     efficiency: 75, 
     avatar: "DK",
-    traits: ["Organized"]
+    traitKeys: ["traits.organized"]
   },
 ];
 
@@ -203,25 +203,25 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
   
   const BENCHMARK_RATIOS = [
     {
-      role: "Support Staff Ratio",
+      role: t("benchmarks.supportStaffRatio"),
       actual: 0,
       optimal: 2.0,
       score: 0,
-      recommendation: "Optimal ratio is 2.0 support staff per provider (MGMA benchmarks). Add providers and support staff to calculate your actual ratio."
+      recommendation: t("benchmarks.supportStaffDesc")
     },
     {
-      role: "Nurse to Doctor Ratio",
+      role: t("benchmarks.nurseToDoctor"),
       actual: 0,
       optimal: 1.5,
       score: 0,
-      recommendation: "Optimal ratio is 1.5 nurses per doctor (American Nurses Association). Add doctors and nurses to calculate your actual ratio."
+      recommendation: t("benchmarks.nurseToDoctorDesc")
     },
     {
-      role: "Exam Rooms per Provider",
+      role: t("benchmarks.examRoomsPerProvider"),
       actual: 0,
       optimal: 2.5,
       score: 0,
-      recommendation: "Optimal ratio is 2-3 exam rooms per provider (ADA standards). Add exam rooms and providers to calculate your actual ratio."
+      recommendation: t("benchmarks.examRoomsPerProviderDesc")
     }
   ];
   
@@ -364,7 +364,7 @@ export default function Staff() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {STAFF.map((member) => (
+        {STAFF_DATA.map((member) => (
           <Card 
             key={member.id} 
             className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary"
@@ -376,14 +376,14 @@ export default function Staff() {
               </Avatar>
               <div className="flex-1">
                 <CardTitle className="text-lg">{member.name}</CardTitle>
-                <CardDescription>{member.role}</CardDescription>
+                <CardDescription>{t(member.roleKey)}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex gap-2 mb-6">
-                {member.traits.map(trait => (
-                  <Badge key={trait} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
-                    {trait}
+                {member.traitKeys.map(traitKey => (
+                  <Badge key={traitKey} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
+                    {t(traitKey)}
                   </Badge>
                 ))}
               </div>
