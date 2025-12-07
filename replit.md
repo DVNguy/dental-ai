@@ -1,0 +1,114 @@
+# PraxisFlow AI - Medical Practice Simulation
+
+## Overview
+
+PraxisFlow AI is an AI-powered medical practice simulation application that helps optimize clinic workflows, efficiency, and staff harmony. The application allows users to design practice layouts, manage staff resources, run simulations with varying patient volumes, and receive AI-driven recommendations for improving practice operations.
+
+The system uses real-world medical industry benchmarks (ADA, AAOMS, OSHA standards) to evaluate room sizes, staffing ratios, patient flow, and layout efficiency, providing actionable insights for practice optimization.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+
+**Framework**: React 18 with TypeScript, using Vite as the build tool
+
+**Routing**: Wouter for lightweight client-side routing
+
+**State Management**: 
+- React Context API for global practice state (PracticeContext)
+- TanStack Query (React Query) for server state management and caching
+
+**UI Framework**: 
+- Shadcn UI component library (Radix UI primitives)
+- Tailwind CSS for styling with custom medical theme
+- Framer Motion for animations
+- Recharts for data visualization
+
+**Key Design Patterns**:
+- Component composition with shadcn/ui components
+- Custom hooks for reusable logic (use-mobile, use-toast)
+- Query-based data fetching with automatic caching and invalidation
+- Context providers for shared state
+
+**Pages**:
+- Dashboard: Overview with metrics and performance charts
+- Layout Editor: Drag-and-drop room placement with AI advisor
+- Staff Management: View and manage staff members
+- Simulation: Run scenarios with configurable parameters
+
+### Backend Architecture
+
+**Runtime**: Node.js with TypeScript (ES modules)
+
+**Framework**: Express.js with custom middleware
+
+**API Design**: RESTful endpoints organized by resource:
+- `/api/practices` - Practice CRUD operations
+- `/api/rooms` - Room management within practices
+- `/api/staff` - Staff member management
+- `/api/simulations` - Run and retrieve simulations
+- `/api/ai/*` - AI analysis and recommendations
+
+**Key Design Patterns**:
+- Storage abstraction layer (IStorage interface) for database operations
+- Separation of concerns: routes, storage, simulation logic, AI services
+- Request/response logging middleware
+- JSON body parsing with raw body preservation for webhooks
+
+**Simulation Engine**: 
+- Pure TypeScript implementation calculating efficiency, harmony, wait times, and patient capacity
+- Based on industry benchmarks (room sizes, staffing ratios, patient flow metrics)
+- Considers room placement, distances, and staffing levels
+
+**AI Integration**:
+- OpenAI API for advanced layout analysis and recommendations
+- Benchmark-based scoring system using medical industry standards
+- Quick recommendations and detailed layout analysis endpoints
+
+### Data Storage
+
+**ORM**: Drizzle ORM with PostgreSQL dialect
+
+**Database Schema**:
+- `users` - User accounts (currently minimal auth)
+- `practices` - Medical practice configurations with budgets
+- `rooms` - Practice layout rooms (type, name, position, dimensions)
+- `staff` - Staff members with roles, efficiency, stress levels, and traits
+- `simulations` - Historical simulation results with parameters
+
+**Migration Strategy**: Drizzle Kit for schema migrations via `db:push` command
+
+**Connection Management**: PostgreSQL connection pool via `pg` library
+
+### External Dependencies
+
+**AI Services**:
+- OpenAI API (configurable base URL and API key)
+- Used for intelligent layout analysis and contextual recommendations
+
+**Database**:
+- PostgreSQL (required, configured via `DATABASE_URL` environment variable)
+- Drizzle ORM for type-safe database queries
+
+**Development Tools**:
+- Vite plugins for Replit integration (cartographer, dev banner, runtime error overlay)
+- Custom meta-images plugin for OpenGraph image injection
+- TypeScript compilation without emission (type checking only)
+
+**Build Process**:
+- Client: Vite builds React app to `dist/public`
+- Server: esbuild bundles server code to single CJS file with selective dependency bundling
+- Allowlist of dependencies bundled to reduce cold start syscalls
+
+**Session Management**: 
+- Infrastructure present (connect-pg-simple, express-session) but not fully implemented in provided code
+
+**Medical Standards Integration**:
+- ADA (American Dental Association) practice design guidelines
+- AAOMS (American Association of Oral and Maxillofacial Surgeons) facility standards
+- OSHA laboratory safety standards
+- Industry benchmarks for patient flow and staffing ratios
