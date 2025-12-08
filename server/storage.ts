@@ -9,14 +9,20 @@ import {
   type InsertStaff,
   type Simulation,
   type InsertSimulation,
+  type KnowledgeSource,
+  type InsertKnowledgeSource,
+  type KnowledgeChunk,
+  type InsertKnowledgeChunk,
   users,
   practices,
   rooms,
   staff,
-  simulations
+  simulations,
+  knowledgeSources,
+  knowledgeChunks
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -40,6 +46,15 @@ export interface IStorage {
   
   getSimulationsByPracticeId(practiceId: string): Promise<Simulation[]>;
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
+
+  getAllKnowledgeSources(): Promise<KnowledgeSource[]>;
+  getKnowledgeSource(id: string): Promise<KnowledgeSource | undefined>;
+  createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource>;
+  deleteKnowledgeSource(id: string): Promise<void>;
+  
+  getChunksBySourceId(sourceId: string): Promise<KnowledgeChunk[]>;
+  createKnowledgeChunk(chunk: InsertKnowledgeChunk): Promise<KnowledgeChunk>;
+  searchKnowledgeChunks(queryEmbedding: number[], limit?: number): Promise<(KnowledgeChunk & { source: KnowledgeSource; similarity: number })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -132,6 +147,80 @@ export class DatabaseStorage implements IStorage {
   async createSimulation(simulation: InsertSimulation): Promise<Simulation> {
     const result = await db.insert(simulations).values(simulation).returning();
     return result[0];
+  }
+
+  async getAllKnowledgeSources(): Promise<KnowledgeSource[]> {
+    return await db.select().from(knowledgeSources).orderBy(desc(knowledgeSources.uploadedAt));
+  }
+
+  async getKnowledgeSource(id: string): Promise<KnowledgeSource | undefined> {
+    const result = await db.select().from(knowledgeSources).where(eq(knowledgeSources.id, id));
+    return result[0];
+  }
+
+  async createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource> {
+    const result = await db.insert(knowledgeSources).values(source).returning();
+    return result[0];
+  }
+
+  async deleteKnowledgeSource(id: string): Promise<void> {
+    await db.delete(knowledgeSources).where(eq(knowledgeSources.id, id));
+  }
+
+  async getChunksBySourceId(sourceId: string): Promise<KnowledgeChunk[]> {
+    return await db.select().from(knowledgeChunks).where(eq(knowledgeChunks.sourceId, sourceId));
+  }
+
+  async createKnowledgeChunk(chunk: InsertKnowledgeChunk): Promise<KnowledgeChunk> {
+    const result = await db.insert(knowledgeChunks).values(chunk).returning();
+    return result[0];
+  }
+
+  async searchKnowledgeChunks(queryEmbedding: number[], limit: number = 10): Promise<(KnowledgeChunk & { source: KnowledgeSource; similarity: number })[]> {
+    const embeddingStr = `[${queryEmbedding.join(',')}]`;
+    
+    const results = await db.execute(sql`
+      SELECT 
+        kc.id,
+        kc.source_id as "sourceId",
+        kc.chunk_index as "chunkIndex",
+        kc.content,
+        kc.tokens,
+        kc.key_points as "keyPoints",
+        ks.id as "source_id",
+        ks.title as "source_title",
+        ks.file_name as "source_fileName",
+        ks.category as "source_category",
+        ks.tags as "source_tags",
+        ks.description as "source_description",
+        ks.uploaded_at as "source_uploadedAt",
+        1 - (kc.embedding <=> ${embeddingStr}::vector) as similarity
+      FROM knowledge_chunks kc
+      JOIN knowledge_sources ks ON kc.source_id = ks.id
+      WHERE kc.embedding IS NOT NULL
+      ORDER BY kc.embedding <=> ${embeddingStr}::vector
+      LIMIT ${limit}
+    `);
+
+    return (results.rows as any[]).map(row => ({
+      id: row.id,
+      sourceId: row.sourceId,
+      chunkIndex: row.chunkIndex,
+      content: row.content,
+      tokens: row.tokens,
+      embedding: null,
+      keyPoints: row.keyPoints,
+      source: {
+        id: row.source_id,
+        title: row.source_title,
+        fileName: row.source_fileName,
+        category: row.source_category,
+        tags: row.source_tags,
+        description: row.source_description,
+        uploadedAt: row.source_uploadedAt
+      },
+      similarity: parseFloat(row.similarity)
+    }));
   }
 }
 

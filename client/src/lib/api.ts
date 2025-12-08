@@ -1,4 +1,4 @@
-import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation } from "@shared/schema";
+import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk } from "@shared/schema";
 
 const API_BASE = "";
 
@@ -91,6 +91,40 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+  },
+
+  knowledge: {
+    list: () => fetchAPI<KnowledgeSource[]>("/api/knowledge"),
+    get: (id: string) => fetchAPI<{ source: KnowledgeSource; chunks: KnowledgeChunk[] }>(`/api/knowledge/${id}`),
+    upload: async (file: File, metadata: { title: string; category: string; tags: string; description?: string }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", metadata.title);
+      formData.append("category", metadata.category);
+      formData.append("tags", metadata.tags);
+      if (metadata.description) {
+        formData.append("description", metadata.description);
+      }
+      
+      const response = await fetch("/api/knowledge/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || "Upload failed");
+      }
+      
+      return response.json() as Promise<{ success: boolean; sourceId: string; chunksProcessed: number; totalTokens: number }>;
+    },
+    delete: (id: string) => fetchAPI<{ success: boolean }>(`/api/knowledge/${id}`, {
+      method: "DELETE",
+    }),
+    search: (query: string, limit?: number) => fetchAPI<Array<KnowledgeChunk & { source: KnowledgeSource; similarity: number }>>("/api/knowledge/search", {
+      method: "POST",
+      body: JSON.stringify({ query, limit }),
+    }),
   },
 };
 

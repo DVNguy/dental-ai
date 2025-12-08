@@ -39,6 +39,7 @@ Preferred communication style: Simple, everyday language.
 - Layout Editor: Drag-and-drop room placement with AI advisor
 - Staff Management: View and manage staff members
 - Simulation: Run scenarios with configurable parameters
+- Knowledge: Upload and manage coaching knowledge documents
 
 ### Backend Architecture
 
@@ -52,6 +53,7 @@ Preferred communication style: Simple, everyday language.
 - `/api/staff` - Staff member management
 - `/api/simulations` - Run and retrieve simulations
 - `/api/ai/*` - AI analysis and recommendations
+- `/api/knowledge` - Coach knowledge base management (upload, search, delete)
 
 **Key Design Patterns**:
 - Storage abstraction layer (IStorage interface) for database operations
@@ -79,6 +81,13 @@ Preferred communication style: Simple, everyday language.
 - `rooms` - Practice layout rooms (type, name, position, dimensions)
 - `staff` - Staff members with roles, efficiency, stress levels, and traits
 - `simulations` - Historical simulation results with parameters
+- `knowledge_sources` - Uploaded coaching documents metadata (title, category, tags)
+- `knowledge_chunks` - Chunked document content with vector embeddings for semantic search
+
+**Vector Search (pgvector)**:
+- Uses pgvector extension for semantic similarity search
+- Embeddings generated via OpenAI text-embedding-3-small model
+- Coaching knowledge is retrieved and injected into AI prompts as primary knowledge source
 
 **Migration Strategy**: Drizzle Kit for schema migrations via `db:push` command
 

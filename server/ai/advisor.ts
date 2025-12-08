@@ -12,6 +12,7 @@ import {
   getLayoutRecommendations,
   pixelsToSqM
 } from "./benchmarks";
+import { searchKnowledge, formatKnowledgeContext } from "./knowledgeProcessor";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -206,35 +207,45 @@ async function generateAIInsights(
     .map(([role, count]) => `${count} ${role}(s)`)
     .join(", ");
 
-  const prompt = `You are an expert medical/dental practice consultant specializing in German healthcare regulations. Analyze this practice layout and provide actionable insights in German.
+  const searchQuery = `Zahnarztpraxis Optimierung ${roomsSummary} ${staffSummary} Effizienz Layout`;
+  let coachKnowledge = "";
+  try {
+    const knowledgeResults = await searchKnowledge(searchQuery, 3);
+    coachKnowledge = formatKnowledgeContext(knowledgeResults);
+  } catch (error) {
+    console.log("No coaching knowledge available yet, using base standards");
+  }
 
-PRACTICE DATA:
+  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach und Berater. Deine Empfehlungen basieren PRIMÄR auf deinem Coach-Wissen (falls vorhanden) und ergänzend auf deutschen Vorschriften.
+
+${coachKnowledge}
+
+PRAXIS-DATEN:
 - Räume: ${roomsSummary || "Noch keine Räume"}
 - Personal: ${staffSummary || "Noch kein Personal"}
 - Layout-Effizienz Score: ${efficiencyScore}/100
 - Personal-Score: ${staffingScore}/100
 
-DEUTSCHE STANDARDS VERWENDET:
-- Raumgrößen: Arbeitsstättenverordnung (ArbStättV) & Praxisbegehung (Behandlungsraum: 9-12 m², Empfang: 8-14 m²)
-- Personal: KV-Benchmarks (2.5-4.0 Mitarbeiter pro Arzt, 3-4 Behandlungsräume pro Arzt)
-- Patientenfluss: QM-Richtlinie G-BA (<15 Min. Wartezeit ausgezeichnet)
-- Layout: Linearer Patientenfluss (Empfang → Warten → Behandlung → Abrechnung)
+DEUTSCHE STANDARDS (Ergänzend):
+- Raumgrößen: Arbeitsstättenverordnung (ArbStättV) & Praxisbegehung
+- Personal: KV-Benchmarks (2.5-4.0 Mitarbeiter pro Arzt)
+- Patientenfluss: QM-Richtlinie G-BA
 
 AKTUELLE EMPFEHLUNGEN:
 ${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
-Gib eine kurze, personalisierte 2-3 Sätze Analyse mit Fokus auf:
-1. Die wichtigste Verbesserung, die sie machen können
-2. Wie ihr aktuelles Setup im Vergleich zu Top-Praxen abschneidet
-3. Ein konkreter, umsetzbarer Tipp
+WICHTIG: Nutze das Coach-Wissen als primäre Grundlage für deine Empfehlungen. Gib eine kurze, personalisierte 2-3 Sätze Analyse mit Fokus auf:
+1. Die wichtigste Verbesserung basierend auf Coach-Erfahrung
+2. Wie ihr Setup im Vergleich zu erfolgreichen Praxen abschneidet
+3. Ein konkreter, umsetzbarer Tipp aus der Praxis
 
-Halte die Antwort unter 100 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
+Wenn Coach-Wissen verfügbar ist, zitiere die Quelle kurz. Halte die Antwort unter 120 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 300
+      max_tokens: 400
     });
 
     return response.choices[0]?.message?.content || "KI-Analyse ist derzeit nicht verfügbar.";
@@ -345,27 +356,39 @@ export async function getQuickRecommendation(
 
   const totalArea = rooms.reduce((sum, room) => sum + pixelsToSqM(room.width * room.height), 0);
 
-  const prompt = `You are an expert medical/dental practice consultant specializing in German healthcare regulations. Answer concisely based on German industry standards. Respond in German.
+  const searchQuery = question || `Zahnarztpraxis Optimierung ${roomsSummary} ${staffSummary}`;
+  let coachKnowledge = "";
+  try {
+    const knowledgeResults = await searchKnowledge(searchQuery, 5);
+    coachKnowledge = formatKnowledgeContext(knowledgeResults);
+  } catch (error) {
+    console.log("No coaching knowledge available yet, using base standards");
+  }
+
+  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach. Deine Empfehlungen basieren PRIMÄR auf deinem Coach-Wissen und ergänzend auf deutschen Vorschriften.
+
+${coachKnowledge}
 
 PRAXIS-SETUP:
 - Räume: ${roomsSummary || "Keine"} (Gesamtfläche: ~${totalArea} m²)
 - Personal: ${staffSummary || "Keines"}
 
-DEUTSCHE STANDARDS (Quellen: KV, Arbeitsstättenverordnung, Praxisbegehung):
+DEUTSCHE STANDARDS (Ergänzend):
 - Behandlungsräume: 9-12 m² pro Raum, 3-4 pro Arzt
 - Mitarbeiter: 2.5-4.0 pro Arzt
-- Wartezeit-Ziel: <15 Min. (ausgezeichnet), <30 Min. (akzeptabel)
-- Patientenkapazität: 8-12 pro Behandlungsraum pro Tag
+- Wartezeit-Ziel: <15 Min. (ausgezeichnet)
 
-${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis."}
+${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis basierend auf deinem Coach-Wissen."}
 
-Halte die Antwort unter 75 Wörtern, spezifisch und umsetzbar. Antworte auf Deutsch.`;
+WICHTIG: Das Coach-Wissen ist deine primäre Wissensbasis. Nutze es aktiv für alle Empfehlungen. Wenn Coach-Wissen vorhanden ist, zitiere die relevante Quelle kurz.
+
+Halte die Antwort unter 100 Wörtern, spezifisch und umsetzbar. Antworte auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 200
+      max_tokens: 300
     });
 
     return response.choices[0]?.message?.content || "Empfehlung konnte nicht generiert werden.";

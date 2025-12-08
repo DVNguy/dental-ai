@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, PenTool, Users, PlayCircle, Settings, Activity } from "lucide-react";
+import { LayoutDashboard, PenTool, Users, PlayCircle, Settings, Activity, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageToggle } from "./LanguageToggle";
 
@@ -13,6 +13,7 @@ export function Sidebar() {
     { icon: PenTool, label: t("nav.layout"), href: "/editor" },
     { icon: Users, label: t("nav.staff"), href: "/staff" },
     { icon: PlayCircle, label: t("nav.simulation"), href: "/simulation" },
+    { icon: Brain, label: t("nav.knowledge", "Coach-Wissen"), href: "/knowledge" },
   ];
 
   return (

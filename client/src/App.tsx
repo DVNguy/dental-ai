@@ -6,6 +6,7 @@ import Dashboard from "@/pages/Dashboard";
 import LayoutEditor from "@/pages/LayoutEditor";
 import Staff from "@/pages/Staff";
 import Simulation from "@/pages/Simulation";
+import Knowledge from "@/pages/Knowledge";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -20,6 +21,7 @@ function Router() {
         <Route path="/editor" component={LayoutEditor} />
         <Route path="/staff" component={Staff} />
         <Route path="/simulation" component={Simulation} />
+        <Route path="/knowledge" component={Knowledge} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
