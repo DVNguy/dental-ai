@@ -9,22 +9,8 @@ import {
 } from "@shared/schema";
 import { runSimulation, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
-import { processDocument, searchKnowledge } from "./ai/knowledgeProcessor";
+import { searchKnowledge } from "./ai/knowledgeProcessor";
 import { z } from "zod";
-import multer from "multer";
-
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        file.mimetype === "application/msword") {
-      cb(null, true);
-    } else {
-      cb(new Error("Only Word documents are allowed"));
-    }
-  }
-});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -299,54 +285,6 @@ export async function registerRoutes(
     }
   });
 
-  const uploadKnowledgeSchema = z.object({
-    title: z.string().min(1),
-    category: z.string().min(1),
-    tags: z.string().transform(s => s.split(",").map(t => t.trim()).filter(Boolean)),
-    description: z.string().optional(),
-  });
-
-  app.post("/api/knowledge/upload", upload.single("file"), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      const { title, category, tags, description } = uploadKnowledgeSchema.parse(req.body);
-
-      const result = await processDocument(
-        req.file.buffer,
-        req.file.originalname,
-        title,
-        category,
-        tags,
-        description
-      );
-
-      res.json({
-        success: true,
-        sourceId: result.sourceId,
-        chunksProcessed: result.chunksProcessed,
-        totalTokens: result.totalTokens,
-      });
-    } catch (error) {
-      console.error("Failed to upload knowledge:", error);
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid metadata", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to process document" });
-    }
-  });
-
-  app.delete("/api/knowledge/:id", async (req, res) => {
-    try {
-      await storage.deleteKnowledgeSource(req.params.id);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Failed to delete knowledge source:", error);
-      res.status(500).json({ error: "Failed to delete knowledge source" });
-    }
-  });
 
   const searchKnowledgeSchema = z.object({
     query: z.string().min(1),

@@ -39,7 +39,7 @@ Preferred communication style: Simple, everyday language.
 - Layout Editor: Drag-and-drop room placement with AI advisor
 - Staff Management: View and manage staff members
 - Simulation: Run scenarios with configurable parameters
-- Knowledge: Upload and manage coaching knowledge documents
+- Knowledge: View integrated coaching knowledge and search the knowledge base
 
 ### Backend Architecture
 
@@ -53,7 +53,7 @@ Preferred communication style: Simple, everyday language.
 - `/api/staff` - Staff member management
 - `/api/simulations` - Run and retrieve simulations
 - `/api/ai/*` - AI analysis and recommendations
-- `/api/knowledge` - Coach knowledge base management (upload, search, delete)
+- `/api/knowledge` - Coach knowledge base (list, get, search - read-only for users)
 
 **Key Design Patterns**:
 - Storage abstraction layer (IStorage interface) for database operations
