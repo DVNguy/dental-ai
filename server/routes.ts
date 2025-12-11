@@ -10,6 +10,7 @@ import {
 import { runSimulation, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
+import { generateCoachResponse } from "./ai/coachChat";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -302,6 +303,24 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid search parameters" });
       }
       res.status(500).json({ error: "Failed to search knowledge" });
+    }
+  });
+
+  const coachChatSchema = z.object({
+    question: z.string().min(1),
+  });
+
+  app.post("/api/ai/coach-chat", async (req, res) => {
+    try {
+      const { question } = coachChatSchema.parse(req.body);
+      const response = await generateCoachResponse(question);
+      res.json(response);
+    } catch (error) {
+      console.error("Coach chat error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+      res.status(500).json({ error: "Failed to generate response" });
     }
   });
 

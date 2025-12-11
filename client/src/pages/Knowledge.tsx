@@ -1,171 +1,239 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useRef, useEffect } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Brain, Search, Loader2, CheckCircle2, BookOpen, TrendingUp, Users, Calculator, Shield } from "lucide-react";
-import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Brain, Send, Loader2, User, Sparkles, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const CATEGORIES = [
-  { value: "scheduling", label: "Terminplanung" },
-  { value: "patient-flow", label: "Patientenfluss" },
-  { value: "staff-management", label: "Personalführung" },
-  { value: "room-layout", label: "Raumplanung" },
-  { value: "efficiency", label: "Effizienz" },
-  { value: "profitability", label: "Wirtschaftlichkeit" },
-  { value: "communication", label: "Kommunikation" },
-  { value: "marketing", label: "Praxismarketing" },
-  { value: "hygiene", label: "Hygiene" },
-  { value: "quality", label: "Qualitätsmanagement" },
-  { value: "general", label: "Allgemein" },
-];
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources?: Array<{ title: string; category: string }>;
+  isStreaming?: boolean;
+}
 
-const EXPERTISE_AREAS = [
-  { icon: TrendingUp, title: "Praxiseffizienz", desc: "Workflow-Optimierung & Lean Management" },
-  { icon: Users, title: "Personalführung", desc: "Recruiting, Teambuilding & Change Management" },
-  { icon: Calculator, title: "Betriebswirtschaft", desc: "Kostenrechnung, KPIs & Wirtschaftlichkeit" },
-  { icon: Shield, title: "Compliance", desc: "GOZ-Abrechnung, Recht & Qualitätsmanagement" },
-];
+const WELCOME_MESSAGE: Message = {
+  id: "welcome",
+  role: "assistant",
+  content: `Willkommen beim **AI Praxis-Coach**! 
+
+Ich bin Ihr persönlicher Berater für alle Fragen rund um die Zahnarztpraxis. Mein Wissen basiert auf umfangreicher Coaching-Erfahrung und aktuellen Branchenstandards.
+
+**Wie kann ich Ihnen helfen?** Fragen Sie mich zum Beispiel:
+- "Wie kann ich die Wartezeiten in meiner Praxis reduzieren?"
+- "Welche KPIs sollte ich monatlich überwachen?"
+- "Tipps für effektives Personalrecruiting"
+- "Wie optimiere ich meine GOZ-Abrechnung?"`,
+};
 
 export default function Knowledge() {
-  const { t } = useTranslation();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    scrollToBottom();
+  }, [messages]);
 
-  const { data: sources = [] } = useQuery({
-    queryKey: ["knowledge-sources"],
-    queryFn: api.knowledge.list,
+  const chatMutation = useMutation({
+    mutationFn: async (question: string) => {
+      const response = await fetch("/api/ai/coach-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Fehler bei der Anfrage");
+      }
+      
+      return response.json() as Promise<{ 
+        answer: string; 
+        sources: Array<{ title: string; category: string }>;
+        webResults?: Array<{ title: string; url: string }>;
+      }>;
+    },
+    onMutate: (question) => {
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: question,
+      };
+      
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      };
+      
+      setMessages(prev => [...prev, userMessage, assistantMessage]);
+    },
+    onSuccess: (data) => {
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.isStreaming 
+            ? { ...msg, content: data.answer, sources: data.sources, isStreaming: false }
+            : msg
+        )
+      );
+    },
+    onError: (error) => {
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.isStreaming 
+            ? { ...msg, content: `Entschuldigung, es gab einen Fehler: ${error.message}`, isStreaming: false }
+            : msg
+        )
+      );
+    },
   });
 
-  const { data: searchResults, isLoading: isSearching } = useQuery({
-    queryKey: ["knowledge-search", debouncedQuery],
-    queryFn: () => api.knowledge.search(debouncedQuery, 5),
-    enabled: debouncedQuery.length > 2,
-  });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || chatMutation.isPending) return;
+    
+    chatMutation.mutate(input.trim());
+    setInput("");
+  };
 
-  const getCategoryLabel = (value: string) => {
-    return CATEGORIES.find(c => c.value === value)?.label || value;
+  const handleNewChat = () => {
+    setMessages([WELCOME_MESSAGE]);
+    inputRef.current?.focus();
   };
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-knowledge">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="heading-knowledge">
-            <Brain className="h-7 w-7 text-primary" />
-            Coach-Wissensbasis
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Expertenwissen als Grundlage für alle KI-Empfehlungen
-          </p>
+    <div className="flex flex-col h-[calc(100vh-4rem)]" data-testid="page-knowledge">
+      <div className="border-b p-4 flex items-center justify-between bg-background/95 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Brain className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold" data-testid="heading-knowledge">
+              AI Praxis-Coach
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Ihr persönlicher Berater für Praxisoptimierung
+            </p>
+          </div>
         </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleNewChat}
+          data-testid="button-new-chat"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Neuer Chat
+        </Button>
       </div>
 
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
-            Umfassendes Praxis-Expertenwissen
-          </CardTitle>
-          <CardDescription>
-            Von A bis Z - fundiert, praxiserprobt und wissenschaftlich basiert
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <p className="text-sm leading-relaxed">
-            Unsere KI basiert auf einer <strong>umfangreichen Wissensbasis</strong>, die jahrelange Erfahrung 
-            in der Beratung und Optimierung von Zahnarztpraxen vereint. Das integrierte Expertenwissen 
-            umfasst alle relevanten Bereiche der modernen Praxisführung - von der strategischen Planung 
-            bis zur operativen Umsetzung.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {EXPERTISE_AREAS.map((area, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border">
-                <area.icon className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="font-medium text-sm">{area.title}</h4>
-                  <p className="text-xs text-muted-foreground">{area.desc}</p>
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="max-w-3xl mx-auto space-y-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex gap-3",
+                message.role === "user" ? "justify-end" : "justify-start"
+              )}
+              data-testid={`message-${message.id}`}
+            >
+              {message.role === "assistant" && (
+                <div className="p-2 rounded-full bg-primary/10 h-fit">
+                  <Sparkles className="h-4 w-4 text-primary" />
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+              
+              <Card className={cn(
+                "max-w-[80%]",
+                message.role === "user" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "bg-muted/50"
+              )}>
+                <CardContent className="p-3">
+                  {message.isStreaming ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Denke nach...</span>
+                    </div>
+                  ) : (
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div 
+                        className="text-sm whitespace-pre-wrap"
+                        dangerouslySetInnerHTML={{ 
+                          __html: message.content
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/\n/g, '<br>')
+                        }} 
+                      />
+                    </div>
+                  )}
+                  
+                  {message.sources && message.sources.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      <p className="text-xs text-muted-foreground mb-1">Basierend auf Coach-Wissen:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {message.sources.slice(0, 3).map((source, i) => (
+                          <span 
+                            key={i} 
+                            className="text-xs px-2 py-0.5 rounded bg-primary/10 text-foreground"
+                            title={source.title}
+                          >
+                            {source.title.length > 30 ? source.title.substring(0, 30) + "..." : source.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              
+              {message.role === "user" && (
+                <div className="p-2 rounded-full bg-primary h-fit">
+                  <User className="h-4 w-4 text-primary-foreground" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>{sources.length} Wissensmodule integriert</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>Kontinuierlich aktualisiert</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span>Deutsche Regularien & Standards</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Wissen durchsuchen
-          </CardTitle>
-          <CardDescription>
-            Stellen Sie eine Frage - die KI findet die relevanten Informationen
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="z.B. Wie optimiere ich die Wartezeiten?"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              data-testid="input-search"
-            />
-          </div>
-          
-          {isSearching && (
-            <div className="flex items-center gap-2 mt-4 text-muted-foreground">
+      <div className="border-t p-4 bg-background/95 backdrop-blur">
+        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex gap-2">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Stellen Sie Ihre Frage..."
+            disabled={chatMutation.isPending}
+            className="flex-1"
+            data-testid="input-chat"
+          />
+          <Button 
+            type="submit" 
+            disabled={!input.trim() || chatMutation.isPending}
+            data-testid="button-send"
+          >
+            {chatMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-              Suche...
-            </div>
-          )}
-          
-          {searchResults && searchResults.length > 0 && (
-            <div className="mt-4 space-y-3">
-              {searchResults.map((result, i) => (
-                <div key={i} className="p-3 border rounded-lg bg-muted/30" data-testid={`search-result-${i}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary">{getCategoryLabel(result.source.category)}</Badge>
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {Math.round(result.similarity * 100)}% relevant
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {result.content}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {searchQuery.length > 2 && searchResults?.length === 0 && !isSearching && (
-            <p className="mt-4 text-muted-foreground text-sm">
-              Keine passenden Ergebnisse gefunden.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
