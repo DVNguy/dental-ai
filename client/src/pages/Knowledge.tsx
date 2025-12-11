@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Search, BookOpen, Loader2, FileText } from "lucide-react";
+import { Brain, Search, Loader2, CheckCircle2, BookOpen, TrendingUp, Users, Calculator, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 const CATEGORIES = [
@@ -21,6 +21,13 @@ const CATEGORIES = [
   { value: "general", label: "Allgemein" },
 ];
 
+const EXPERTISE_AREAS = [
+  { icon: TrendingUp, title: "Praxiseffizienz", desc: "Workflow-Optimierung & Lean Management" },
+  { icon: Users, title: "Personalführung", desc: "Recruiting, Teambuilding & Change Management" },
+  { icon: Calculator, title: "Betriebswirtschaft", desc: "Kostenrechnung, KPIs & Wirtschaftlichkeit" },
+  { icon: Shield, title: "Compliance", desc: "GOZ-Abrechnung, Recht & Qualitätsmanagement" },
+];
+
 export default function Knowledge() {
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,7 +38,7 @@ export default function Knowledge() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data: sources = [], isLoading } = useQuery({
+  const { data: sources = [] } = useQuery({
     queryKey: ["knowledge-sources"],
     queryFn: api.knowledge.list,
   });
@@ -60,6 +67,53 @@ export default function Knowledge() {
         </div>
       </div>
 
+      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-primary" />
+            Umfassendes Praxis-Expertenwissen
+          </CardTitle>
+          <CardDescription>
+            Von A bis Z - fundiert, praxiserprobt und wissenschaftlich basiert
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <p className="text-sm leading-relaxed">
+            Unsere KI basiert auf einer <strong>umfangreichen Wissensbasis</strong>, die jahrelange Erfahrung 
+            in der Beratung und Optimierung von Zahnarztpraxen vereint. Das integrierte Expertenwissen 
+            umfasst alle relevanten Bereiche der modernen Praxisführung - von der strategischen Planung 
+            bis zur operativen Umsetzung.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {EXPERTISE_AREAS.map((area, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border">
+                <area.icon className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="font-medium text-sm">{area.title}</h4>
+                  <p className="text-xs text-muted-foreground">{area.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span>{sources.length} Wissensmodule integriert</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span>Kontinuierlich aktualisiert</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span>Deutsche Regularien & Standards</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -67,7 +121,7 @@ export default function Knowledge() {
             Wissen durchsuchen
           </CardTitle>
           <CardDescription>
-            Durchsuchen Sie die integrierte Coaching-Wissensbasis
+            Stellen Sie eine Frage - die KI findet die relevanten Informationen
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -93,7 +147,6 @@ export default function Knowledge() {
                 <div key={i} className="p-3 border rounded-lg bg-muted/30" data-testid={`search-result-${i}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="secondary">{getCategoryLabel(result.source.category)}</Badge>
-                    <span className="text-sm font-medium">{result.source.title}</span>
                     <span className="text-xs text-muted-foreground ml-auto">
                       {Math.round(result.similarity * 100)}% relevant
                     </span>
@@ -110,58 +163,6 @@ export default function Knowledge() {
             <p className="mt-4 text-muted-foreground text-sm">
               Keine passenden Ergebnisse gefunden.
             </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Integriertes Wissen ({sources.length} Quellen)
-          </CardTitle>
-          <CardDescription>
-            Fest eingebautes Coaching-Expertenwissen
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Lade Quellen...
-            </div>
-          ) : sources.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Brain className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>Die Wissensbasis wird gerade eingerichtet.</p>
-              <p className="text-sm mt-1">
-                Bald stehen hier Coaching-Tipps für optimale Praxisführung zur Verfügung.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {sources.map(source => (
-                <div
-                  key={source.id}
-                  className="flex items-start gap-3 p-4 border rounded-lg"
-                  data-testid={`knowledge-source-${source.id}`}
-                >
-                  <FileText className="h-8 w-8 text-primary shrink-0 mt-1" />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium">{source.title}</h3>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <Badge>{getCategoryLabel(source.category)}</Badge>
-                      {source.tags.map((tag, i) => (
-                        <Badge key={i} variant="outline">{tag}</Badge>
-                      ))}
-                    </div>
-                    {source.description && (
-                      <p className="text-sm text-muted-foreground mt-2">{source.description}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </CardContent>
       </Card>
