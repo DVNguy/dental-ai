@@ -165,7 +165,12 @@ Preferred communication style: Simple, everyday language.
 
 **API Endpoints**:
 - `POST /api/ai/coach-chat` - Main coach chat (uses RAG)
-- `POST /api/v1/rag/query` - Direct RAG query with topK parameter
+- `POST /api/v1/rag/query` - Direct RAG query with KB-first, Web-second logic
+  - Request: `{ question: string, topK?: number (1-20, default 5) }`
+  - Response: `{ answer, kbCitations[], webCitations[], kbCoverage }`
+  - kbCitations: `{ chunkId, docName, headingPath, score }`
+  - webCitations: `{ title, publisher, date, url }`
+  - kbCoverage: "sufficient" | "partial" | "insufficient"
 
 **Environment Secrets Required**:
 - `OPENAI_API_KEY` - For embeddings and chat completions

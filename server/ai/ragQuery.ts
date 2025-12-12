@@ -123,7 +123,7 @@ async function performWebSearch(question: string): Promise<WebResult[]> {
         return {
           title: r.title || "Webquelle",
           url: r.url,
-          snippet: (r.content || "").slice(0, 2000),
+          snippet: (r.content || "").slice(0, 2500),
           publisher,
           date: new Date().toISOString().split("T")[0]
         };

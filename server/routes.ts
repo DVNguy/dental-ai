@@ -374,13 +374,18 @@ export async function registerRoutes(
       const response = await queryRAG(question, topK);
       res.json({
         answer: response.answer,
-        retrievedChunks: response.kbChunks.map((c) => ({
-          id: c.id,
-          docName: c.docName,
-          headingPath: c.headingPath,
+        kbCitations: response.kbChunks.map((c) => ({
+          chunkId: c.id,
+          docName: c.docName.replace(/\.docx$/i, ""),
+          headingPath: c.headingPath || "Allgemein",
           score: c.score,
         })),
-        webResults: response.webResults,
+        webCitations: response.webResults?.map((w) => ({
+          title: w.title,
+          publisher: w.publisher || "web",
+          date: w.date || new Date().toISOString().split("T")[0],
+          url: w.url,
+        })),
         kbCoverage: response.kbCoverage,
       });
     } catch (error) {
