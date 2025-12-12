@@ -69,8 +69,10 @@ Preferred communication style: Simple, everyday language.
 
 **AI Integration**:
 - OpenAI API for advanced layout analysis and recommendations
+- Tavily API for real-time web search (current regulations, guidelines, industry news)
 - Benchmark-based scoring system using medical industry standards
 - Quick recommendations and detailed layout analysis endpoints
+- AI Coach with RAG-based knowledge retrieval + live web search
 
 ### Data Storage
 
