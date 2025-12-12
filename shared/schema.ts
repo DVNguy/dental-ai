@@ -72,6 +72,20 @@ export const knowledgeChunks = pgTable("knowledge_chunks", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const knowledgeArtifacts = pgTable("knowledge_artifacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id"),
+  artifactType: text("artifact_type").notNull(),
+  module: text("module").notNull(),
+  topic: text("topic").notNull(),
+  payloadJson: jsonb("payload_json").notNull(),
+  sourceCitations: jsonb("source_citations").notNull(),
+  confidence: real("confidence").notNull().default(0.8),
+  version: integer("version").notNull().default(1),
+  sourceHash: text("source_hash"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -103,6 +117,11 @@ export const insertKnowledgeChunkSchema = createInsertSchema(knowledgeChunks).om
   id: true,
 });
 
+export const insertKnowledgeArtifactSchema = createInsertSchema(knowledgeArtifacts).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -123,3 +142,6 @@ export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
 
 export type InsertKnowledgeChunk = z.infer<typeof insertKnowledgeChunkSchema>;
 export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
+
+export type InsertKnowledgeArtifact = z.infer<typeof insertKnowledgeArtifactSchema>;
+export type KnowledgeArtifact = typeof knowledgeArtifacts.$inferSelect;
