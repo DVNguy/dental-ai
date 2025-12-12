@@ -1,9 +1,14 @@
 import OpenAI from "openai";
+import { tavily } from "@tavily/core";
 import { searchKnowledge, formatKnowledgeContext } from "./knowledgeProcessor";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+const tavilyClient = process.env.TAVILY_API_KEY 
+  ? tavily({ apiKey: process.env.TAVILY_API_KEY })
+  : null;
 
 export interface CoachChatResponse {
   answer: string;
@@ -12,40 +17,27 @@ export interface CoachChatResponse {
 }
 
 async function performWebSearch(query: string): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  if (!tavilyClient) {
+    console.log("Tavily API key not configured, skipping web search");
+    return [];
+  }
+
   try {
-    const searchPrompt = `Suche nach aktuellen, relevanten Informationen zu: "${query}"
+    const germanQuery = `${query} Zahnarztpraxis Deutschland`;
     
-Fokus auf:
-- Deutsche Zahnarztpraxis-Standards und Regularien
-- Aktuelle Best Practices im Praxismanagement
-- Branchentrends und Innovationen
-- Kosteneffiziente Lösungen
-
-Gib 2-3 relevante Fakten oder Tipps zurück. Antworte mit JSON im Format: {"results": [{"title": "...", "content": "..."}]}`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "Du bist ein Recherche-Assistent für Zahnarztpraxen. Antworte immer mit JSON im Format: {\"results\": [{\"title\": \"Titel\", \"content\": \"Inhalt\"}]}"
-        },
-        { role: "user", content: searchPrompt }
-      ],
-      max_tokens: 500,
-      response_format: { type: "json_object" }
+    const response = await tavilyClient.search(germanQuery, {
+      searchDepth: "basic",
+      maxResults: 3,
+      includeAnswer: false,
     });
 
-    const content = response.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(content);
-    const results = parsed.results || [];
-    return results.map((r: any) => ({
-      title: r.title || "Brancheninfo",
-      url: "",
-      snippet: r.content || r.snippet || ""
+    return response.results.map((result) => ({
+      title: result.title || "Brancheninfo",
+      url: result.url || "",
+      snippet: result.content || ""
     }));
   } catch (error) {
-    console.error("Web search simulation error:", error);
+    console.error("Tavily web search error:", error);
     return [];
   }
 }
