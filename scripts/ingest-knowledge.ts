@@ -15,17 +15,33 @@ const MIN_TOKENS = 600;
 const MAX_TOKENS = 900;
 const OVERLAP_TOKENS = 100;
 
+const FORCE_MODE = process.argv.includes("--force") || process.env.FORCE_REINGEST === "1";
+const DEBUG_MODE = process.argv.includes("--debug");
+
 interface ChunkInfo {
   content: string;
   headingPath: string;
   tokens: number;
 }
 
+interface IngestStats {
+  documentsProcessed: number;
+  documentsSkippedUnchanged: number;
+  chunksExisting: number;
+  chunksInserted: number;
+  chunksUpdated: number;
+  chunksSkipped: number;
+}
+
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-function computeHash(content: string): string {
+function computeFileHash(buffer: Buffer): string {
+  return crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 16);
+}
+
+function computeContentHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
@@ -159,10 +175,14 @@ async function generateEmbedding(text: string): Promise<number[]> {
   return response.data[0].embedding;
 }
 
-async function ingestDocument(filePath: string): Promise<{ chunks: number; skipped: number }> {
+async function ingestDocument(filePath: string, stats: IngestStats): Promise<void> {
   const fileName = path.basename(filePath);
   const buffer = fs.readFileSync(filePath);
-  const fileHash = computeHash(buffer.toString("base64"));
+  const fileHash = computeFileHash(buffer);
+  
+  if (DEBUG_MODE) {
+    console.log(`  📋 ${fileName} → hash: ${fileHash}`);
+  }
   
   const existingSource = await db.select()
     .from(knowledgeSources)
@@ -170,19 +190,26 @@ async function ingestDocument(filePath: string): Promise<{ chunks: number; skipp
     .limit(1);
   
   let sourceId: string;
+  const isUnchanged = existingSource.length > 0 && existingSource[0].fileHash === fileHash;
   
-  if (existingSource.length > 0 && existingSource[0].fileHash === fileHash) {
+  if (isUnchanged && !FORCE_MODE) {
     console.log(`  ⏭️  Unchanged: ${fileName}`);
-    return { chunks: 0, skipped: 1 };
+    stats.documentsSkippedUnchanged++;
+    return;
   }
+  
+  stats.documentsProcessed++;
   
   if (existingSource.length > 0) {
     sourceId = existingSource[0].id;
-    await db.delete(knowledgeChunks).where(eq(knowledgeChunks.sourceId, sourceId));
-    await db.update(knowledgeSources)
-      .set({ fileHash, updatedAt: new Date() })
-      .where(eq(knowledgeSources.id, sourceId));
-    console.log(`  🔄 Updating: ${fileName}`);
+    if (!isUnchanged) {
+      await db.update(knowledgeSources)
+        .set({ fileHash, updatedAt: new Date() })
+        .where(eq(knowledgeSources.id, sourceId));
+      console.log(`  🔄 Updating: ${fileName}`);
+    } else {
+      console.log(`  🔁 Force re-ingesting: ${fileName}`);
+    }
   } else {
     const title = fileName.replace(/\.docx$/i, "").replace(/[_-]/g, " ");
     const [newSource] = await db.insert(knowledgeSources).values({
@@ -199,11 +226,9 @@ async function ingestDocument(filePath: string): Promise<{ chunks: number; skipp
   const text = await extractTextWithHeadings(buffer);
   const chunkInfos = splitIntoHeadingBasedChunks(text);
   
-  let insertedChunks = 0;
-  
   for (let i = 0; i < chunkInfos.length; i++) {
     const chunk = chunkInfos[i];
-    const contentHash = computeHash(chunk.content);
+    const contentHash = computeContentHash(chunk.content);
     
     const existingChunk = await db.select()
       .from(knowledgeChunks)
@@ -211,6 +236,14 @@ async function ingestDocument(filePath: string): Promise<{ chunks: number; skipp
       .limit(1);
     
     if (existingChunk.length > 0) {
+      if (existingChunk[0].sourceId !== sourceId) {
+        await db.update(knowledgeChunks)
+          .set({ sourceId, headingPath: chunk.headingPath, chunkIndex: i })
+          .where(eq(knowledgeChunks.id, existingChunk[0].id));
+        stats.chunksUpdated++;
+      } else {
+        stats.chunksExisting++;
+      }
       continue;
     }
     
@@ -226,14 +259,20 @@ async function ingestDocument(filePath: string): Promise<{ chunks: number; skipp
       embedding,
     });
     
-    insertedChunks++;
+    stats.chunksInserted++;
   }
-  
-  return { chunks: insertedChunks, skipped: 0 };
 }
 
 async function main() {
   console.log("🚀 Knowledge Ingestion Starting...\n");
+  
+  if (FORCE_MODE) {
+    console.log("⚡ FORCE MODE ENABLED - Re-processing all documents\n");
+  }
+  if (DEBUG_MODE) {
+    console.log("🔍 DEBUG MODE ENABLED - Showing hash details\n");
+  }
+  
   const startTime = Date.now();
   
   const files = fs.readdirSync(KNOWLEDGE_DOCS_DIR)
@@ -242,14 +281,18 @@ async function main() {
   
   console.log(`📚 Found ${files.length} documents\n`);
   
-  let totalChunks = 0;
-  let totalSkipped = 0;
+  const stats: IngestStats = {
+    documentsProcessed: 0,
+    documentsSkippedUnchanged: 0,
+    chunksExisting: 0,
+    chunksInserted: 0,
+    chunksUpdated: 0,
+    chunksSkipped: 0,
+  };
   
   for (const file of files) {
     try {
-      const result = await ingestDocument(file);
-      totalChunks += result.chunks;
-      totalSkipped += result.skipped;
+      await ingestDocument(file, stats);
     } catch (error) {
       console.error(`  ❌ Error: ${path.basename(file)}:`, error);
     }
@@ -260,9 +303,14 @@ async function main() {
   console.log("\n" + "=".repeat(50));
   console.log("📊 Ingestion Summary");
   console.log("=".repeat(50));
-  console.log(`Documents processed: ${files.length}`);
-  console.log(`Documents skipped (unchanged): ${totalSkipped}`);
-  console.log(`Chunks created/updated: ${totalChunks}`);
+  console.log(`Documents found:              ${files.length}`);
+  console.log(`Documents processed:          ${stats.documentsProcessed}`);
+  console.log(`Documents skipped (unchanged):${stats.documentsSkippedUnchanged}`);
+  console.log("-".repeat(50));
+  console.log(`Chunks inserted (new):        ${stats.chunksInserted}`);
+  console.log(`Chunks updated (moved):       ${stats.chunksUpdated}`);
+  console.log(`Chunks existing (unchanged):  ${stats.chunksExisting}`);
+  console.log("-".repeat(50));
   console.log(`Duration: ${duration}s`);
   console.log("=".repeat(50));
 }
