@@ -12,6 +12,12 @@ import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
 import { generateCoachResponse } from "./ai/coachChat";
 import { queryRAG, retrieveKnowledgeChunks } from "./ai/ragQuery";
+import {
+  getKnowledgePoweredRoomSizes,
+  getKnowledgePoweredStaffing,
+  getKnowledgePoweredScheduling,
+  getHealthScoreDrivers
+} from "./ai/artifactBenchmarks";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -359,6 +365,28 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid query parameters" });
       }
       res.status(500).json({ error: "Failed to process query" });
+    }
+  });
+
+  app.get("/api/benchmarks", async (req, res) => {
+    try {
+      const [roomSizes, staffing, scheduling, healthScore] = await Promise.all([
+        getKnowledgePoweredRoomSizes(),
+        getKnowledgePoweredStaffing(),
+        getKnowledgePoweredScheduling(),
+        getHealthScoreDrivers()
+      ]);
+
+      res.json({
+        roomSizes,
+        staffing,
+        scheduling,
+        healthScoreWeights: healthScore.weights,
+        healthScoreFromKnowledge: healthScore.fromKnowledge
+      });
+    } catch (error) {
+      console.error("Failed to fetch benchmarks:", error);
+      res.status(500).json({ error: "Failed to fetch benchmarks" });
     }
   });
 

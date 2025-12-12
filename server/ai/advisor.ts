@@ -13,6 +13,11 @@ import {
   pixelsToSqM
 } from "./benchmarks";
 import { searchKnowledge, formatKnowledgeContext } from "./knowledgeProcessor";
+import {
+  evaluateRoomSizeWithKnowledge,
+  getKnowledgePoweredRecommendations
+} from "./artifactBenchmarks";
+import { formatCitations } from "./artifactService";
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -39,6 +44,8 @@ export interface RoomAnalysis {
   sizeAssessment: "undersized" | "optimal" | "oversized";
   actualSqM: number;
   recommendation: string;
+  source?: string;
+  fromKnowledge?: boolean;
 }
 
 export interface StaffingAnalysis {
@@ -151,19 +158,24 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
   return Math.max(0, Math.min(100, score));
 }
 
-function analyzeRooms(rooms: Room[]): RoomAnalysis[] {
-  return rooms.map(room => {
-    const evaluation = evaluateRoomSize(room.type, room.width, room.height);
-    return {
-      roomId: room.id,
-      roomName: room.name || room.type,
-      roomType: room.type,
-      sizeScore: evaluation.score,
-      sizeAssessment: evaluation.assessment,
-      actualSqM: evaluation.actualSqM,
-      recommendation: evaluation.recommendation
-    };
-  });
+async function analyzeRoomsWithKnowledge(rooms: Room[]): Promise<RoomAnalysis[]> {
+  const analyses = await Promise.all(
+    rooms.map(async (room) => {
+      const evaluation = await evaluateRoomSizeWithKnowledge(room.type, room.width, room.height);
+      return {
+        roomId: room.id,
+        roomName: room.name || room.type,
+        roomType: room.type,
+        sizeScore: evaluation.score,
+        sizeAssessment: evaluation.assessment,
+        actualSqM: evaluation.actualSqM,
+        recommendation: evaluation.recommendation,
+        source: evaluation.citations.length > 0 ? formatCitations(evaluation.citations).join(", ") : undefined,
+        fromKnowledge: evaluation.fromKnowledge
+      };
+    })
+  );
+  return analyses;
 }
 
 function analyzeStaffing(staff: Staff[], rooms: Room[]): StaffingAnalysis {
@@ -262,7 +274,7 @@ export async function analyzeLayout(
 ): Promise<LayoutAnalysis> {
   const efficiencyScore = calculateLayoutEfficiencyScore(rooms);
   
-  const roomAnalyses = analyzeRooms(rooms);
+  const roomAnalyses = await analyzeRoomsWithKnowledge(rooms);
   const avgRoomScore = roomAnalyses.length > 0
     ? roomAnalyses.reduce((sum, r) => sum + r.sizeScore, 0) / roomAnalyses.length
     : 50;
@@ -277,7 +289,7 @@ export async function analyzeLayout(
   const hasLab = rooms.some(r => r.type === "lab");
   const hasOffice = rooms.some(r => r.type === "office");
 
-  const recommendations = getLayoutRecommendations(
+  const knowledgeRecommendations = await getKnowledgePoweredRecommendations(
     hasReception,
     hasWaiting,
     examRoomCount,
@@ -285,9 +297,15 @@ export async function analyzeLayout(
     hasOffice
   );
 
+  const recommendations: string[] = knowledgeRecommendations.map(rec => {
+    const citation = rec.citations.length > 0 ? ` [${formatCitations(rec.citations).join(", ")}]` : "";
+    return rec.text + citation;
+  });
+
   roomAnalyses.forEach(analysis => {
     if (analysis.sizeAssessment !== "optimal") {
-      recommendations.push(`${analysis.roomName}: ${analysis.recommendation}`);
+      const source = analysis.source ? ` [${analysis.source}]` : "";
+      recommendations.push(`${analysis.roomName}: ${analysis.recommendation}${source}`);
     }
   });
 
