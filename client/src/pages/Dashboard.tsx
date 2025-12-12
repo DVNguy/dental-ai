@@ -200,15 +200,15 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-primary" data-testid="text-dashboard-title">{t("dashboard.title")}</h2>
-          <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary" data-testid="text-dashboard-title">{t("dashboard.title")}</h2>
+          <p className="text-sm md:text-base text-muted-foreground">{t("dashboard.subtitle")}</p>
         </div>
         <div className="flex items-center space-x-2">
           <Link href="/simulation">
-            <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95" data-testid="button-run-simulation">
+            <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 w-full sm:w-auto" data-testid="button-run-simulation">
               <Play className="mr-2 h-4 w-4" /> {t("dashboard.runSim")}
             </Button>
           </Link>
@@ -316,10 +316,10 @@ export default function Dashboard() {
 
         <StatsCards />
         
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-7">
           <EfficiencyChart />
           
-          <div className="col-span-3 rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
+          <div className="lg:col-span-3 rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col">
             <div className="p-6 flex flex-col space-y-1.5">
               <h3 className="font-semibold leading-none tracking-tight">{t("dashboard.liveView")}</h3>
               <p className="text-sm text-muted-foreground">{t("dashboard.liveViewDesc")}</p>

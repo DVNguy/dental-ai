@@ -113,17 +113,17 @@ export default function Knowledge() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]" data-testid="page-knowledge">
-      <div className="border-b p-4 flex items-center justify-between bg-background/95 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Brain className="h-6 w-6 text-primary" />
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]" data-testid="page-knowledge">
+      <div className="border-b p-3 md:p-4 flex items-center justify-between bg-background/95 backdrop-blur">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="p-1.5 md:p-2 rounded-lg bg-primary/10">
+            <Brain className="h-5 w-5 md:h-6 md:w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold" data-testid="heading-knowledge">
+            <h1 className="text-base md:text-lg font-semibold" data-testid="heading-knowledge">
               AI Praxis-Coach
             </h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">
               Ihr persönlicher Berater für Praxisoptimierung
             </p>
           </div>
@@ -133,9 +133,10 @@ export default function Knowledge() {
           size="sm" 
           onClick={handleNewChat}
           data-testid="button-new-chat"
+          className="text-xs md:text-sm"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Neuer Chat
+          <RefreshCw className="h-4 w-4 md:mr-2" />
+          <span className="hidden md:inline">Neuer Chat</span>
         </Button>
       </div>
 
