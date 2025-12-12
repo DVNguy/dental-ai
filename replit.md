@@ -148,6 +148,13 @@ Preferred communication style: Simple, everyday language.
 
 ## RAG System Operations
 
+**Artifact Building**:
+- Script: `npx tsx scripts/build-artifacts.ts`
+- Extracts structured JSON artifacts from knowledge chunks using GPT-4o
+- Zod validation ensures type safety
+- Idempotent: skips unchanged artifacts via source hash
+- Generates: 5 dashboard, 3 staffing, 3 layout artifacts
+
 **Knowledge Ingestion**:
 - Script: `npx tsx scripts/ingest-knowledge.ts`
 - Source: `.docx` files in `/knowledge-docs/` directory

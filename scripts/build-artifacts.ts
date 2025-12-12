@@ -2,230 +2,403 @@ import crypto from "crypto";
 import OpenAI from "openai";
 import { db } from "../server/db";
 import { knowledgeChunks, knowledgeSources, knowledgeArtifacts } from "../shared/schema";
-import { eq, sql } from "drizzle-orm";
-import { ARTIFACT_TYPES, MODULES, type SourceCitation } from "../shared/taxonomy";
+import { eq, sql, and } from "drizzle-orm";
+import { z } from "zod";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-interface ChunkGroup {
+const ARTIFACT_DEFINITIONS: ArtifactDefinition[] = [
+  // Dashboard artifacts (5)
+  {
+    module: "dashboard",
+    topic: "health_score_weights",
+    artifactType: "config",
+    prompt: `Extrahiere aus dem Wissenskontext die optimalen GEWICHTUNGEN für einen Praxis-Gesundheitsscore.
+    Liefere JSON mit: efficiency_weight, harmony_weight, patient_satisfaction_weight, staff_wellbeing_weight (alle 0-1, Summe = 1).`,
+    schema: z.object({
+      efficiency_weight: z.number().min(0).max(1),
+      harmony_weight: z.number().min(0).max(1),
+      patient_satisfaction_weight: z.number().min(0).max(1),
+      staff_wellbeing_weight: z.number().min(0).max(1)
+    }),
+    searchTerms: ["Effizienz", "Kennzahl", "Performance", "Zufriedenheit", "Score"]
+  },
+  {
+    module: "dashboard",
+    topic: "kpi_benchmarks",
+    artifactType: "benchmark",
+    prompt: `Extrahiere die wichtigsten KPIs und Benchmarks für Zahnarztpraxen.
+    Liefere JSON mit: revenue_per_hour (number), patients_per_day (number), recall_rate_target (number 0-1), new_patient_rate_target (number 0-1).`,
+    schema: z.object({
+      revenue_per_hour: z.number(),
+      patients_per_day: z.number(),
+      recall_rate_target: z.number(),
+      new_patient_rate_target: z.number()
+    }),
+    searchTerms: ["Umsatz", "Patient", "Kennzahl", "Benchmark", "KPI"]
+  },
+  {
+    module: "dashboard",
+    topic: "efficiency_drivers",
+    artifactType: "insight",
+    prompt: `Identifiziere die Haupttreiber für Praxiseffizienz.
+    Liefere JSON mit: drivers (Array von {name, impact_score 1-10, category, recommendation}).`,
+    schema: z.object({
+      drivers: z.array(z.object({
+        name: z.string(),
+        impact_score: z.number().min(1).max(10),
+        category: z.string(),
+        recommendation: z.string()
+      }))
+    }),
+    searchTerms: ["Effizienz", "Optimierung", "Prozess", "Workflow", "Verbesserung"]
+  },
+  {
+    module: "dashboard",
+    topic: "patient_flow_metrics",
+    artifactType: "benchmark",
+    prompt: `Extrahiere Patientenfluss-Metriken und optimale Durchlaufzeiten.
+    Liefere JSON mit: avg_appointment_duration_min, max_wait_time_min, optimal_schedule_buffer_percent, patients_per_treatment_room.`,
+    schema: z.object({
+      avg_appointment_duration_min: z.number(),
+      max_wait_time_min: z.number(),
+      optimal_schedule_buffer_percent: z.number(),
+      patients_per_treatment_room: z.number()
+    }),
+    searchTerms: ["Wartezeit", "Termin", "Durchlauf", "Patient", "Zeitmanagement"]
+  },
+  {
+    module: "dashboard",
+    topic: "quality_indicators",
+    artifactType: "benchmark",
+    prompt: `Extrahiere Qualitätsindikatoren für Zahnarztpraxen.
+    Liefere JSON mit: treatment_success_rate, patient_retention_rate, complaint_rate_max, recommendation_rate_target.`,
+    schema: z.object({
+      treatment_success_rate: z.number(),
+      patient_retention_rate: z.number(),
+      complaint_rate_max: z.number(),
+      recommendation_rate_target: z.number()
+    }),
+    searchTerms: ["Qualität", "Erfolg", "Zufriedenheit", "Beschwerde", "Empfehlung"]
+  },
+
+  // Staffing artifacts (3)
+  {
+    module: "staffing",
+    topic: "role_ratios",
+    artifactType: "config",
+    prompt: `Extrahiere optimale Personalverhältnisse für Zahnarztpraxen.
+    Liefere JSON mit: mfa_per_dentist (number), reception_per_dentist (number), prophylaxis_per_dentist (number), total_staff_per_dentist (number).`,
+    schema: z.object({
+      mfa_per_dentist: z.number(),
+      reception_per_dentist: z.number(),
+      prophylaxis_per_dentist: z.number(),
+      total_staff_per_dentist: z.number()
+    }),
+    searchTerms: ["Personal", "MFA", "Zahnarzt", "Verhältnis", "Team"]
+  },
+  {
+    module: "staffing",
+    topic: "skill_requirements",
+    artifactType: "config",
+    prompt: `Extrahiere Qualifikationsanforderungen pro Rolle.
+    Liefere JSON mit: roles (Array von {role, required_skills[], optional_skills[], certification_requirements[]}).`,
+    schema: z.object({
+      roles: z.array(z.object({
+        role: z.string(),
+        required_skills: z.array(z.string()),
+        optional_skills: z.array(z.string()),
+        certification_requirements: z.array(z.string())
+      }))
+    }),
+    searchTerms: ["Qualifikation", "Ausbildung", "Kompetenz", "Fortbildung", "Zertifikat"]
+  },
+  {
+    module: "staffing",
+    topic: "scheduling_rules",
+    artifactType: "config",
+    prompt: `Extrahiere Regeln für optimale Personalplanung.
+    Liefere JSON mit: min_staff_per_shift (number), peak_hours_multiplier (number), min_break_duration_min (number), max_continuous_work_hours (number), overlap_time_minutes (number).`,
+    schema: z.object({
+      min_staff_per_shift: z.number(),
+      peak_hours_multiplier: z.number(),
+      min_break_duration_min: z.number(),
+      max_continuous_work_hours: z.number(),
+      overlap_time_minutes: z.number()
+    }),
+    searchTerms: ["Schicht", "Planung", "Pause", "Arbeitszeit", "Personal"]
+  },
+
+  // Layout artifacts (3)
+  {
+    module: "layout",
+    topic: "room_size_standards",
+    artifactType: "benchmark",
+    prompt: `Extrahiere Raumgrößen-Standards gemäß deutscher Vorschriften.
+    Liefere JSON mit: room_types (Object mit Raumtyp als Key und {min_sqm, optimal_sqm, max_sqm, regulation_reference} als Value).`,
+    schema: z.object({
+      room_types: z.record(z.object({
+        min_sqm: z.number(),
+        optimal_sqm: z.number(),
+        max_sqm: z.number(),
+        regulation_reference: z.string()
+      }))
+    }),
+    searchTerms: ["Raumgröße", "Quadratmeter", "Behandlungsraum", "Wartebereich", "Empfang"]
+  },
+  {
+    module: "layout",
+    topic: "proximity_rules",
+    artifactType: "config",
+    prompt: `Extrahiere Regeln für optimale Raumanordnung und Laufwege.
+    Liefere JSON mit: proximity_pairs (Array von {room1, room2, max_distance_m, reason}).`,
+    schema: z.object({
+      proximity_pairs: z.array(z.object({
+        room1: z.string(),
+        room2: z.string(),
+        max_distance_m: z.number(),
+        reason: z.string()
+      }))
+    }),
+    searchTerms: ["Laufweg", "Entfernung", "Anordnung", "Workflow", "Nähe"]
+  },
+  {
+    module: "layout",
+    topic: "workflow_zones",
+    artifactType: "config",
+    prompt: `Extrahiere Empfehlungen für Praxis-Zonen und Workflow-Bereiche.
+    Liefere JSON mit: zones (Array von {zone_name, included_rooms[], accessibility_level, patient_flow_order}).`,
+    schema: z.object({
+      zones: z.array(z.object({
+        zone_name: z.string(),
+        included_rooms: z.array(z.string()),
+        accessibility_level: z.string(),
+        patient_flow_order: z.number()
+      }))
+    }),
+    searchTerms: ["Zone", "Bereich", "Workflow", "Patient", "Ablauf"]
+  }
+];
+
+interface ArtifactDefinition {
+  module: string;
+  topic: string;
+  artifactType: string;
+  prompt: string;
+  schema: z.ZodSchema;
+  searchTerms: string[];
+}
+
+interface ChunkWithSource {
+  id: string;
   docName: string;
   headingPath: string | null;
-  chunks: Array<{ id: string; content: string }>;
-  contentHash: string;
+  content: string;
 }
-
-const EXTRACTION_PROMPT = `You are an expert at extracting structured knowledge artifacts from dental practice management documents.
-
-Extract ALL relevant artifacts from the provided text. Each artifact should be one of:
-- benchmark: Numeric standards/thresholds (room sizes, wait times, ratios)
-- rule: Business rules or constraints (if X then Y)
-- formula: Calculations or formulas for metrics
-- checklist: Step-by-step checklists or procedures
-- template: Text templates or scripts
-- playbook: Multi-step action plans
-
-For each artifact, identify which module it belongs to:
-- dashboard: Overall practice health/scoring
-- layout: Room sizes, placement, spatial design
-- staffing: Staff ratios, roles, scheduling
-- scheduling: Appointment timing, buffers, patient flow
-- hygiene: Sterilization, infection control
-- billing: GOZ, BEMA, invoicing
-- marketing: Patient acquisition, retention
-- qm: Quality management, documentation
-
-Return ONLY valid JSON array. Each object must have:
-{
-  "artifactType": "benchmark|rule|formula|checklist|template|playbook",
-  "module": "dashboard|layout|staffing|scheduling|hygiene|billing|marketing|qm",
-  "topic": "short descriptive topic name",
-  "payload": {
-    // For benchmark: { "metric": "name", "unit": "m²|min|ratio|%", "min": n, "max": n, "optimal": n, "description": "...", "source": "regulation name" }
-    // For rule: { "condition": "...", "action": "...", "priority": "critical|high|medium|low", "description": "..." }
-    // For formula: { "name": "...", "formula": "...", "variables": {"var": "description"}, "description": "..." }
-    // For checklist: { "name": "...", "items": ["..."], "frequency": "daily|weekly|monthly", "description": "..." }
-    // For template: { "name": "...", "template": "...", "variables": ["..."], "description": "..." }
-    // For playbook: { "name": "...", "steps": [{"order": 1, "action": "...", "details": "..."}], "description": "..." }
-  },
-  "confidence": 0.0-1.0
-}
-
-IMPORTANT:
-- Extract only concrete, actionable artifacts with specific values
-- Do NOT extract vague or generic statements
-- Numbers must be extracted precisely as stated in the source
-- If uncertain, set lower confidence (0.5-0.7)
-- Return empty array [] if no concrete artifacts found`;
 
 function computeHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
-async function getChunkGroups(): Promise<ChunkGroup[]> {
-  const results = await db
-    .select({
-      id: knowledgeChunks.id,
-      content: knowledgeChunks.content,
-      headingPath: knowledgeChunks.headingPath,
-      docName: knowledgeSources.fileName,
-    })
-    .from(knowledgeChunks)
-    .innerJoin(knowledgeSources, eq(knowledgeChunks.sourceId, knowledgeSources.id))
-    .orderBy(knowledgeSources.fileName, knowledgeChunks.headingPath);
+async function searchRelevantChunks(searchTerms: string[], limit: number = 10): Promise<ChunkWithSource[]> {
+  const patterns = searchTerms.map(t => `%${t}%`);
+  const results = await db.execute(sql`
+    SELECT 
+      kc.id,
+      ks.file_name as doc_name,
+      kc.heading_path,
+      kc.content
+    FROM knowledge_chunks kc
+    JOIN knowledge_sources ks ON kc.source_id = ks.id
+    WHERE kc.content ILIKE ANY(ARRAY[${sql.join(patterns.map(p => sql`${p}`), sql`, `)}])
+    LIMIT ${limit}
+  `);
 
-  const groups = new Map<string, ChunkGroup>();
-
-  for (const row of results) {
-    const key = `${row.docName}::${row.headingPath || "root"}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        docName: row.docName,
-        headingPath: row.headingPath,
-        chunks: [],
-        contentHash: "",
-      });
-    }
-    groups.get(key)!.chunks.push({ id: row.id, content: row.content });
-  }
-
-  for (const group of groups.values()) {
-    const combined = group.chunks.map(c => c.content).join("\n");
-    group.contentHash = computeHash(combined);
-  }
-
-  return Array.from(groups.values());
+  return (results.rows as any[]).map(row => ({
+    id: row.id,
+    docName: row.doc_name,
+    headingPath: row.heading_path,
+    content: row.content
+  }));
 }
 
-async function extractArtifacts(group: ChunkGroup): Promise<any[]> {
-  const combinedContent = group.chunks.map(c => c.content).join("\n\n");
-  
-  if (combinedContent.length < 100) {
-    return [];
+async function generateArtifact(
+  definition: ArtifactDefinition,
+  chunks: ChunkWithSource[]
+): Promise<{ payload: any; citations: any[] } | null> {
+  if (chunks.length === 0) {
+    console.log(`  ⚠️  No relevant chunks found for ${definition.module}/${definition.topic}`);
+    return null;
   }
+
+  const context = chunks.map((c, i) => 
+    `[Quelle ${i + 1}: ${c.docName} > ${c.headingPath || "Allgemein"}]\n${c.content}`
+  ).join("\n\n---\n\n");
+
+  const systemPrompt = `Du bist ein Experte für Zahnarztpraxis-Management.
+Analysiere den Wissenskontext und extrahiere strukturierte Daten.
+
+WICHTIG:
+- Antworte NUR mit validem JSON (kein Markdown, keine Erklärungen)
+- Verwende realistische Werte basierend auf deutschen Standards
+- Wenn Werte nicht im Kontext stehen, nutze typische Branchenwerte`;
+
+  const userPrompt = `WISSENSKONTEXT:
+${context}
+
+AUFGABE:
+${definition.prompt}
+
+Antworte NUR mit dem JSON-Objekt:`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: EXTRACTION_PROMPT },
-        { role: "user", content: `Document: ${group.docName}\nSection: ${group.headingPath || "General"}\n\n${combinedContent.slice(0, 12000)}` }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
       ],
-      response_format: { type: "json_object" },
-      max_tokens: 4000,
-      temperature: 0.3
+      max_tokens: 1500,
+      temperature: 0.3,
+      response_format: { type: "json_object" }
     });
 
-    const content = response.choices[0]?.message?.content || "{}";
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.log(`  ❌ Empty response for ${definition.module}/${definition.topic}`);
+      return null;
+    }
+
     const parsed = JSON.parse(content);
     
-    const artifacts = Array.isArray(parsed) ? parsed : (parsed.artifacts || []);
-    
-    return artifacts.filter((a: any) => 
-      ARTIFACT_TYPES.includes(a.artifactType) && 
-      MODULES.includes(a.module) &&
-      a.topic &&
-      a.payload
-    );
+    // Validate with zod
+    const validated = definition.schema.safeParse(parsed);
+    if (!validated.success) {
+      console.log(`  ❌ Validation failed for ${definition.module}/${definition.topic}:`, validated.error.message);
+      return null;
+    }
+
+    const citations = chunks.map(c => ({
+      chunkId: c.id,
+      docName: c.docName.replace(/\.docx$/i, ""),
+      headingPath: c.headingPath || "Allgemein"
+    }));
+
+    return { payload: validated.data, citations };
   } catch (error) {
-    console.error(`  Error extracting from ${group.docName}:`, error);
-    return [];
+    console.log(`  ❌ Error generating ${definition.module}/${definition.topic}:`, error);
+    return null;
   }
 }
 
-async function main() {
-  const BATCH_LIMIT = parseInt(process.env.ARTIFACT_BATCH_LIMIT || "20", 10);
-  const PRIORITY_KEYWORDS = ["Raumgröße", "Behandlungsraum", "Personal", "Wartezeit", "MFA", "Termin", "Patient", "Labor", "Empfang", "m²", "Quadratmeter"];
+async function buildArtifact(definition: ArtifactDefinition): Promise<boolean> {
+  console.log(`\n📦 Building: ${definition.module}/${definition.topic}`);
   
-  console.log("🔧 Building Knowledge Artifacts...\n");
-  console.log(`📋 Batch limit: ${BATCH_LIMIT} groups per run\n`);
-  const startTime = Date.now();
-
-  const allGroups = await getChunkGroups();
-  console.log(`📚 Found ${allGroups.length} total chunk groups\n`);
-
-  const groupsToProcess: ChunkGroup[] = [];
-  let skippedGroups = 0;
-
-  for (const group of allGroups) {
-    const existingArtifact = await db
-      .select({ id: knowledgeArtifacts.id })
-      .from(knowledgeArtifacts)
-      .where(eq(knowledgeArtifacts.sourceHash, group.contentHash))
-      .limit(1);
-
-    if (existingArtifact.length > 0) {
-      skippedGroups++;
-      continue;
-    }
-    groupsToProcess.push(group);
+  // Search for relevant chunks
+  const chunks = await searchRelevantChunks(definition.searchTerms, 8);
+  
+  if (chunks.length === 0) {
+    console.log(`  ⏭️  Skipped: No relevant knowledge found`);
+    return false;
   }
 
-  console.log(`⏭️  Skipping ${skippedGroups} already-processed groups`);
-  console.log(`📝 ${groupsToProcess.length} groups need processing\n`);
+  // Compute source hash for idempotency
+  const sourceContent = chunks.map(c => c.content).join("");
+  const sourceHash = computeHash(sourceContent + definition.prompt);
 
-  const priorityGroups = groupsToProcess.filter(g => {
-    const combined = g.chunks.map(c => c.content).join(" ");
-    return PRIORITY_KEYWORDS.some(kw => combined.toLowerCase().includes(kw.toLowerCase()));
+  // Check if artifact exists with same hash
+  const existing = await db.select()
+    .from(knowledgeArtifacts)
+    .where(and(
+      eq(knowledgeArtifacts.module, definition.module),
+      eq(knowledgeArtifacts.topic, definition.topic),
+      eq(knowledgeArtifacts.sourceHash, sourceHash)
+    ))
+    .limit(1);
+
+  if (existing.length > 0) {
+    console.log(`  ⏭️  Unchanged (hash match)`);
+    return true;
+  }
+
+  // Generate artifact
+  const result = await generateArtifact(definition, chunks);
+  if (!result) {
+    return false;
+  }
+
+  // Delete old versions
+  await db.delete(knowledgeArtifacts)
+    .where(and(
+      eq(knowledgeArtifacts.module, definition.module),
+      eq(knowledgeArtifacts.topic, definition.topic)
+    ));
+
+  // Insert new artifact
+  await db.insert(knowledgeArtifacts).values({
+    module: definition.module,
+    topic: definition.topic,
+    artifactType: definition.artifactType,
+    payloadJson: result.payload,
+    sourceCitations: result.citations,
+    sourceHash,
+    confidence: 0.85,
+    version: 1
   });
-  const otherGroups = groupsToProcess.filter(g => !priorityGroups.includes(g));
-  const sortedGroups = [...priorityGroups, ...otherGroups];
 
-  const batchGroups = sortedGroups.slice(0, BATCH_LIMIT);
-  console.log(`🎯 Processing ${batchGroups.length} groups this batch (${priorityGroups.length} priority)\n`);
+  console.log(`  ✅ Created with ${result.citations.length} citations`);
+  return true;
+}
 
-  let totalArtifacts = 0;
-  let processedGroups = 0;
+async function main() {
+  console.log("🚀 Knowledge Artifacts Build Starting...\n");
+  console.log("=".repeat(50));
 
-  for (const group of batchGroups) {
-    console.log(`  [${processedGroups + 1}/${batchGroups.length}] ${group.docName.slice(0, 40)}... > ${(group.headingPath || "root").slice(0, 50)}`);
-    
-    const artifacts = await extractArtifacts(group);
-    
-    for (const artifact of artifacts) {
-      const citations: SourceCitation[] = group.chunks.map(c => ({
-        docName: group.docName,
-        headingPath: group.headingPath,
-        chunkId: c.id
-      }));
+  const startTime = Date.now();
+  let success = 0;
+  let failed = 0;
+  let skipped = 0;
 
-      await db.insert(knowledgeArtifacts).values({
-        artifactType: artifact.artifactType,
-        module: artifact.module,
-        topic: artifact.topic,
-        payloadJson: artifact.payload,
-        sourceCitations: citations,
-        confidence: artifact.confidence || 0.8,
-        sourceHash: group.contentHash,
-        version: 1
-      });
+  const dashboard = ARTIFACT_DEFINITIONS.filter(d => d.module === "dashboard");
+  const staffing = ARTIFACT_DEFINITIONS.filter(d => d.module === "staffing");
+  const layout = ARTIFACT_DEFINITIONS.filter(d => d.module === "layout");
 
-      totalArtifacts++;
-    }
+  console.log(`📊 Dashboard artifacts: ${dashboard.length}`);
+  console.log(`👥 Staffing artifacts: ${staffing.length}`);
+  console.log(`🏗️  Layout artifacts: ${layout.length}`);
 
-    processedGroups++;
-    
-    if (processedGroups % 5 === 0) {
-      console.log(`  ... ${processedGroups}/${batchGroups.length} processed, ${totalArtifacts} artifacts extracted`);
+  for (const definition of ARTIFACT_DEFINITIONS) {
+    try {
+      const result = await buildArtifact(definition);
+      if (result) success++;
+      else failed++;
+    } catch (error) {
+      console.log(`  ❌ Error: ${error}`);
+      failed++;
     }
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-  const remaining = sortedGroups.length - batchGroups.length;
 
   console.log("\n" + "=".repeat(50));
-  console.log("📊 Artifact Build Summary");
+  console.log("📊 Build Summary");
   console.log("=".repeat(50));
-  console.log(`Groups processed this batch: ${processedGroups}`);
-  console.log(`Groups already processed: ${skippedGroups}`);
-  console.log(`Groups remaining: ${remaining}`);
-  console.log(`Artifacts created: ${totalArtifacts}`);
-  console.log(`Duration: ${duration}s`);
-  if (remaining > 0) {
-    console.log(`\n💡 Run again to process next batch of ${Math.min(remaining, BATCH_LIMIT)} groups`);
-  } else {
-    console.log(`\n✅ All groups processed!`);
+  console.log(`Total definitions: ${ARTIFACT_DEFINITIONS.length}`);
+  console.log(`Successful:        ${success}`);
+  console.log(`Failed:            ${failed}`);
+  console.log(`Duration:          ${duration}s`);
+  console.log("=".repeat(50));
+
+  // Show artifact counts by module
+  const counts = await db.execute(sql`
+    SELECT module, COUNT(*) as count 
+    FROM knowledge_artifacts 
+    GROUP BY module
+  `);
+  console.log("\n📦 Artifacts in database:");
+  for (const row of counts.rows as any[]) {
+    console.log(`  ${row.module}: ${row.count}`);
   }
-  console.log("=".repeat(50));
 }
 
 main().catch(console.error).finally(() => process.exit(0));
