@@ -145,3 +145,28 @@ Preferred communication style: Simple, everyday language.
 **Internationalization**:
 - Full German and English language support via i18next
 - AI responses in German when using German interface
+
+## RAG System Operations
+
+**Knowledge Ingestion**:
+- Script: `npx tsx scripts/ingest-knowledge.ts`
+- Source: `.docx` files in `/knowledge-docs/` directory
+- Chunking: Heading-based with 600-900 token chunks, 100 token overlap
+- Hash-based upsert: Skips unchanged files/chunks for efficient re-runs
+- Embeddings: OpenAI text-embedding-3-small (1536 dimensions)
+
+**RAG Query Pipeline** (`server/ai/ragQuery.ts`):
+1. Generate embedding for user question
+2. pgvector similarity search against knowledge_chunks
+3. Assess KB coverage (sufficient/partial/insufficient based on similarity scores)
+4. If KB insufficient OR time-sensitive topic → Tavily web search
+5. Filter web results to authoritative German medical domains
+6. Generate answer with mandatory KB/Web source citations
+
+**API Endpoints**:
+- `POST /api/ai/coach-chat` - Main coach chat (uses RAG)
+- `POST /api/v1/rag/query` - Direct RAG query with topK parameter
+
+**Environment Secrets Required**:
+- `OPENAI_API_KEY` - For embeddings and chat completions
+- `TAVILY_API_KEY` - For web search augmentation (optional)

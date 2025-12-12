@@ -113,13 +113,21 @@ async function performWebSearch(question: string): Promise<WebResult[]> {
       { searchDepth: "basic", maxResults: 5 }
     );
     
-    const results: WebResult[] = response.results.map(r => ({
-      title: r.title || "Webquelle",
-      url: r.url || "",
-      snippet: (r.content || "").slice(0, 2000),
-      publisher: new URL(r.url || "").hostname.replace("www.", ""),
-      date: new Date().toISOString().split("T")[0]
-    }));
+    const results: WebResult[] = response.results
+      .filter(r => r.url && r.url.startsWith("http"))
+      .map(r => {
+        let publisher = "web";
+        try {
+          publisher = new URL(r.url).hostname.replace("www.", "");
+        } catch {}
+        return {
+          title: r.title || "Webquelle",
+          url: r.url,
+          snippet: (r.content || "").slice(0, 2000),
+          publisher,
+          date: new Date().toISOString().split("T")[0]
+        };
+      });
     
     return filterAuthoritativeDomains(results);
   } catch (error) {
