@@ -212,7 +212,7 @@ export async function registerRoutes(
         patientVolume,
         operatingHours,
       };
-      const result = runSimulation(rooms, staff, parameters);
+      const result = await runSimulation(rooms, staff, parameters);
 
       const simulation = await storage.createSimulation({
         practiceId,

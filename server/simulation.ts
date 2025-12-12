@@ -163,12 +163,60 @@ function calculateHarmonyScore(staff: Staff[], rooms: Room[]): number {
   return Math.max(0, Math.min(100, score));
 }
 
-function calculatePatientCapacity(rooms: Room[], staff: Staff[], operatingHours: number): number {
+interface SchedulingDefaults {
+  avgServiceTime: number;
+  bufferMinutes: number;
+  maxWaitTime: number;
+}
+
+const DEFAULT_SCHEDULING: SchedulingDefaults = {
+  avgServiceTime: 30,
+  bufferMinutes: 5,
+  maxWaitTime: 15
+};
+
+async function loadSchedulingDefaults(): Promise<SchedulingDefaults> {
+  try {
+    const scheduling = await getKnowledgePoweredScheduling();
+    const serviceTimes = Object.values(scheduling.serviceTimes);
+    const avgServiceTime = serviceTimes.length > 0
+      ? serviceTimes.reduce((sum, s) => sum + (typeof s.value === 'number' ? s.value : 30), 0) / serviceTimes.length
+      : DEFAULT_SCHEDULING.avgServiceTime;
+    
+    const bufferMinutes = scheduling.bufferMinutes?.value != null && typeof scheduling.bufferMinutes.value === 'number'
+      ? scheduling.bufferMinutes.value
+      : DEFAULT_SCHEDULING.bufferMinutes;
+    
+    const maxWaitTime = scheduling.maxWaitTime?.value != null && typeof scheduling.maxWaitTime.value === 'number'
+      ? scheduling.maxWaitTime.value
+      : DEFAULT_SCHEDULING.maxWaitTime;
+    
+    return {
+      avgServiceTime: Math.max(5, Math.min(120, avgServiceTime)),
+      bufferMinutes: Math.max(0, Math.min(30, bufferMinutes)),
+      maxWaitTime: Math.max(5, Math.min(60, maxWaitTime))
+    };
+  } catch (error) {
+    return DEFAULT_SCHEDULING;
+  }
+}
+
+function calculatePatientCapacity(
+  rooms: Room[], 
+  staff: Staff[], 
+  operatingHours: number,
+  schedulingDefaults?: SchedulingDefaults
+): number {
   const examRooms = rooms.filter(r => r.type === "exam");
   const doctors = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
   
   const patientsPerRoomPerDay = PATIENT_FLOW_METRICS.patientsPerExamRoomPerDay.acceptable;
-  const throughputPerHour = PATIENT_FLOW_METRICS.patientThroughputPerHour.acceptable;
+  
+  let throughputPerHour = PATIENT_FLOW_METRICS.patientThroughputPerHour.acceptable;
+  if (schedulingDefaults) {
+    const totalServiceTime = schedulingDefaults.avgServiceTime + schedulingDefaults.bufferMinutes;
+    throughputPerHour = Math.max(1, Math.round(60 / Math.max(1, totalServiceTime)));
+  }
   
   const roomBasedCapacity = examRooms.length * patientsPerRoomPerDay;
   const providerBasedCapacity = doctors * throughputPerHour * operatingHours;
@@ -192,10 +240,11 @@ function calculateWaitTime(
   patientCapacity: number, 
   patientVolume: number, 
   efficiencyScore: number,
-  staff: Staff[]
+  staff: Staff[],
+  schedulingDefaults?: SchedulingDefaults
 ): number {
   const excellentWaitTime = PATIENT_FLOW_METRICS.waitTime.excellent;
-  const acceptableWaitTime = PATIENT_FLOW_METRICS.waitTime.acceptable;
+  const acceptableWaitTime = schedulingDefaults?.maxWaitTime || PATIENT_FLOW_METRICS.waitTime.acceptable;
   const poorWaitTime = PATIENT_FLOW_METRICS.waitTime.poor;
   
   const volumeRatio = patientVolume / Math.max(1, patientCapacity);
@@ -221,19 +270,22 @@ function calculateWaitTime(
   return Math.max(5, Math.min(60, Math.round(waitTime)));
 }
 
-export function runSimulation(
+export async function runSimulation(
   rooms: Room[],
   staff: Staff[],
   parameters: SimulationParameters
-): SimulationResult {
+): Promise<SimulationResult> {
+  const schedulingDefaults = await loadSchedulingDefaults();
+  
   const efficiencyScore = calculateEfficiencyScore(rooms);
   const harmonyScore = calculateHarmonyScore(staff, rooms);
-  const patientCapacity = calculatePatientCapacity(rooms, staff, parameters.operatingHours);
+  const patientCapacity = calculatePatientCapacity(rooms, staff, parameters.operatingHours, schedulingDefaults);
   const waitTime = calculateWaitTime(
     patientCapacity,
     parameters.patientVolume,
     efficiencyScore,
-    staff
+    staff,
+    schedulingDefaults
   );
 
   return {
