@@ -32,9 +32,8 @@ export const staff = pgTable("staff", {
   name: text("name").notNull(),
   role: text("role").notNull(),
   avatar: text("avatar").notNull(),
-  efficiency: integer("efficiency").notNull(),
-  stress: integer("stress").notNull(),
-  traits: text("traits").array().notNull(),
+  experienceLevel: integer("experience_level").notNull().default(3),
+  specializations: text("specializations").array().notNull(),
 });
 
 export const simulations = pgTable("simulations", {

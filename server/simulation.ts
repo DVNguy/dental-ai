@@ -6,7 +6,7 @@ import {
   LAYOUT_EFFICIENCY_PRINCIPLES,
   evaluateRoomSize,
   evaluateStaffingRatios,
-  pixelsToSqFt
+  pixelsToSqM
 } from "./ai/benchmarks";
 
 export interface SimulationParameters {
@@ -59,9 +59,10 @@ function calculateEfficiencyScore(rooms: Room[]): number {
     const distanceFt = distancePx * 0.5;
     
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.receptionToWaiting;
-    if (distanceFt <= benchmark.optimal) {
+    const distanceM = distanceFt * 0.3048;
+    if (distanceM <= benchmark.optimal) {
       score += 12;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 8;
     } else {
       score -= 5;
@@ -77,10 +78,11 @@ function calculateEfficiencyScore(rooms: Room[]): number {
     
     const distanceFt = avgDistance * 0.5;
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.waitingToExam;
+    const distanceM = distanceFt * 0.3048;
     
-    if (distanceFt <= benchmark.optimal) {
+    if (distanceM <= benchmark.optimal) {
       score += 15;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 8;
     } else {
       score -= 5;
@@ -105,10 +107,11 @@ function calculateEfficiencyScore(rooms: Room[]): number {
     
     const distanceFt = avgDistance * 0.5;
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.examToLab;
+    const distanceM = distanceFt * 0.3048;
     
-    if (distanceFt <= benchmark.optimal) {
+    if (distanceM <= benchmark.optimal) {
       score += 10;
-    } else if (distanceFt <= benchmark.maxFeet) {
+    } else if (distanceM <= benchmark.maxMeters) {
       score += 5;
     } else {
       score -= 3;
@@ -150,14 +153,8 @@ function calculateHarmonyScore(staff: Staff[], rooms: Room[]): number {
 
   let score = staffingAnalysis.overallScore;
 
-  const avgEfficiency = staff.reduce((sum, s) => sum + s.efficiency, 0) / staff.length;
-  score += (avgEfficiency - 50) * 0.2;
-
-  const avgStress = staff.reduce((sum, s) => sum + s.stress, 0) / staff.length;
-  score -= (avgStress - 50) * 0.3;
-
-  const highStressCount = staff.filter(s => s.stress > 70).length;
-  if (highStressCount > staff.length * 0.3) score -= 8;
+  const avgExperience = staff.reduce((sum, s) => sum + s.experienceLevel, 0) / staff.length;
+  score += (avgExperience - 3) * 5;
 
   return Math.max(0, Math.min(100, score));
 }
@@ -178,11 +175,11 @@ function calculatePatientCapacity(rooms: Room[], staff: Staff[], operatingHours:
     capacity = examRooms.length * Math.floor(patientsPerRoomPerDay * 0.6);
   }
 
-  const avgEfficiency = staff.length > 0 
-    ? staff.reduce((sum, s) => sum + s.efficiency, 0) / staff.length 
-    : 50;
-  const efficiencyMultiplier = 0.5 + (avgEfficiency / 100);
-  capacity = Math.floor(capacity * efficiencyMultiplier);
+  const avgExperience = staff.length > 0 
+    ? staff.reduce((sum, s) => sum + s.experienceLevel, 0) / staff.length 
+    : 3;
+  const experienceMultiplier = 0.7 + (avgExperience / 5) * 0.6;
+  capacity = Math.floor(capacity * experienceMultiplier);
 
   return Math.max(1, capacity);
 }
@@ -212,13 +209,9 @@ function calculateWaitTime(
   let waitTime = baseWaitTime * efficiencyFactor;
 
   if (staff.length > 0) {
-    const avgEfficiency = staff.reduce((sum, s) => sum + s.efficiency, 0) / staff.length;
-    const staffFactor = 1 + ((100 - avgEfficiency) / 100) * 0.3;
-    waitTime *= staffFactor;
-
-    const avgStress = staff.reduce((sum, s) => sum + s.stress, 0) / staff.length;
-    const stressFactor = 1 + (avgStress / 100) * 0.2;
-    waitTime *= stressFactor;
+    const avgExperience = staff.reduce((sum, s) => sum + s.experienceLevel, 0) / staff.length;
+    const experienceFactor = 1.3 - (avgExperience / 5) * 0.3;
+    waitTime *= experienceFactor;
   }
 
   return Math.max(5, Math.min(60, Math.round(waitTime)));
