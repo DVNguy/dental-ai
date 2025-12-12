@@ -2,54 +2,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Star, Zap, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Target } from "lucide-react";
+import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { api, type LayoutAnalysis, type StaffingAnalysis } from "@/lib/api";
+import { api, type LayoutAnalysis } from "@/lib/api";
 import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-const STAFF_DATA = [
-  { 
-    id: 1, 
-    name: "Dr. Sarah Weber", 
-    roleKey: "roles.generalPractitioner", 
-    stress: 25, 
-    efficiency: 95, 
-    avatar: "SW",
-    traitKeys: ["traits.empathetic", "traits.fast"]
-  },
-  { 
-    id: 2, 
-    name: "Dr. James Chen", 
-    roleKey: "roles.specialist", 
-    stress: 65, 
-    efficiency: 88, 
-    avatar: "JC",
-    traitKeys: ["traits.detailOriented"]
-  },
-  { 
-    id: 3, 
-    name: "Maria Rodriguez", 
-    roleKey: "roles.nurse", 
-    stress: 40, 
-    efficiency: 92, 
-    avatar: "MR",
-    traitKeys: ["traits.multitasker", "traits.friendly"]
-  },
-  { 
-    id: 4, 
-    name: "David Kim", 
-    roleKey: "roles.receptionist", 
-    stress: 80, 
-    efficiency: 75, 
-    avatar: "DK",
-    traitKeys: ["traits.organized"]
-  },
-];
+import type { Staff as StaffType } from "@shared/schema";
 
 function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
@@ -324,9 +285,87 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
   );
 }
 
+function ExperienceStars({ level }: { level: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={cn(
+            "h-4 w-4",
+            star <= level ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+function getInitials(name: string): string {
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function getRoleLabel(role: string, t: (key: string) => string): string {
+  const roleMap: Record<string, string> = {
+    doctor: t("roles.generalPractitioner"),
+    dentist: t("roles.dentist"),
+    nurse: t("roles.nurse"),
+    receptionist: t("roles.receptionist"),
+    assistant: t("roles.assistant"),
+  };
+  return roleMap[role] || role;
+}
+
+function StaffCard({ member, t }: { member: StaffType; t: (key: string) => string }) {
+  return (
+    <Card 
+      className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary"
+      data-testid={`staff-card-${member.id}`}
+    >
+      <CardHeader className="flex flex-row items-center gap-4 pb-2">
+        <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+          <AvatarFallback className="bg-primary/10 text-primary font-bold">
+            {member.avatar || getInitials(member.name)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1">
+          <CardTitle className="text-lg">{member.name}</CardTitle>
+          <CardDescription>{getRoleLabel(member.role, t)}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {member.specializations.map(spec => (
+            <Badge key={spec} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
+              {spec}
+            </Badge>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">{t("staff.experience")}</span>
+          <ExperienceStars level={member.experienceLevel} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyStaffState({ t }: { t: (key: string) => string }) {
+  return (
+    <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+      <Users className="h-12 w-12 text-muted-foreground/30 mb-4" />
+      <h3 className="text-lg font-medium text-muted-foreground mb-2">{t("staff.noStaff")}</h3>
+      <p className="text-sm text-muted-foreground/70 max-w-md">
+        {t("staff.addStaffHint")}
+      </p>
+    </div>
+  );
+}
+
 export default function Staff() {
   const { t } = useTranslation();
-  const { practiceId } = usePractice();
+  const { practiceId, practice } = usePractice();
 
   const { data: analysis, isLoading } = useQuery({
     queryKey: ["ai-analysis", practiceId],
@@ -335,14 +374,16 @@ export default function Staff() {
     staleTime: 30000,
   });
 
+  const staffMembers = practice?.staff || [];
+
   return (
-    <div className="flex-1 overflow-y-auto p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-primary" data-testid="text-staff-title">{t("staff.title")}</h2>
-          <p className="text-muted-foreground">{t("staff.subtitle")}</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary" data-testid="text-staff-title">{t("staff.title")}</h2>
+          <p className="text-sm md:text-base text-muted-foreground">{t("staff.subtitle")}</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90" data-testid="button-add-staff">
+        <Button className="bg-primary hover:bg-primary/90 w-full sm:w-auto" data-testid="button-add-staff">
           <Plus className="mr-2 h-4 w-4" /> {t("staff.add")}
         </Button>
       </div>
@@ -364,60 +405,13 @@ export default function Staff() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {STAFF_DATA.map((member) => (
-          <Card 
-            key={member.id} 
-            className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary"
-            data-testid={`staff-card-${member.id}`}
-          >
-            <CardHeader className="flex flex-row items-center gap-4 pb-2">
-              <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                <AvatarFallback className="bg-primary/10 text-primary font-bold">{member.avatar}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <CardTitle className="text-lg">{member.name}</CardTitle>
-                <CardDescription>{t(member.roleKey)}</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2 mb-6">
-                {member.traitKeys.map(traitKey => (
-                  <Badge key={traitKey} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
-                    {t(traitKey)}
-                  </Badge>
-                ))}
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
-                      <Zap className="w-3 h-3" /> {t("staff.efficiency")}
-                    </span>
-                    <span className="font-medium">{member.efficiency}%</span>
-                  </div>
-                  <Progress value={member.efficiency} className="h-2 bg-slate-100" indicatorClassName="bg-primary" />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
-                      <Star className="w-3 h-3" /> {t("staff.stress")}
-                    </span>
-                    <span className={member.stress > 70 ? "text-destructive font-bold" : "font-medium"}>
-                      {member.stress}%
-                    </span>
-                  </div>
-                  <Progress 
-                    value={member.stress} 
-                    className="h-2 bg-slate-100" 
-                    indicatorClassName={member.stress > 70 ? "bg-destructive" : "bg-secondary"} 
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {staffMembers.length > 0 ? (
+          staffMembers.map((member) => (
+            <StaffCard key={member.id} member={member} t={t} />
+          ))
+        ) : (
+          <EmptyStaffState t={t} />
+        )}
       </div>
     </div>
   );

@@ -174,6 +174,11 @@ const resources = {
       "roles.specialist": "Specialist",
       "roles.nurse": "Nurse",
       "roles.receptionist": "Receptionist",
+      "roles.dentist": "Dentist",
+      "roles.assistant": "Medical Assistant",
+      
+      "staff.experience": "Experience",
+      "staff.noStaff": "No staff members yet",
       
       "traits.empathetic": "Empathetic",
       "traits.fast": "Fast",
@@ -364,6 +369,11 @@ const resources = {
       "roles.specialist": "Facharzt/Fachärztin",
       "roles.nurse": "Pflegefachkraft",
       "roles.receptionist": "Empfangskraft",
+      "roles.dentist": "Zahnarzt/Zahnärztin",
+      "roles.assistant": "Medizinische/r Fachangestellte/r",
+      
+      "staff.experience": "Erfahrung",
+      "staff.noStaff": "Noch keine Mitarbeiter",
       
       "traits.empathetic": "Einfühlsam",
       "traits.fast": "Schnell",
