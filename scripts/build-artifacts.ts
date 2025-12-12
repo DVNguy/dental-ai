@@ -133,17 +133,20 @@ async function extractArtifacts(group: ChunkGroup): Promise<any[]> {
 }
 
 async function main() {
+  const BATCH_LIMIT = parseInt(process.env.ARTIFACT_BATCH_LIMIT || "20", 10);
+  const PRIORITY_KEYWORDS = ["Raumgröße", "Behandlungsraum", "Personal", "Wartezeit", "MFA", "Termin", "Patient", "Labor", "Empfang", "m²", "Quadratmeter"];
+  
   console.log("🔧 Building Knowledge Artifacts...\n");
+  console.log(`📋 Batch limit: ${BATCH_LIMIT} groups per run\n`);
   const startTime = Date.now();
 
-  const groups = await getChunkGroups();
-  console.log(`📚 Found ${groups.length} chunk groups to process\n`);
+  const allGroups = await getChunkGroups();
+  console.log(`📚 Found ${allGroups.length} total chunk groups\n`);
 
-  let totalArtifacts = 0;
+  const groupsToProcess: ChunkGroup[] = [];
   let skippedGroups = 0;
-  let processedGroups = 0;
 
-  for (const group of groups) {
+  for (const group of allGroups) {
     const existingArtifact = await db
       .select({ id: knowledgeArtifacts.id })
       .from(knowledgeArtifacts)
@@ -154,8 +157,27 @@ async function main() {
       skippedGroups++;
       continue;
     }
+    groupsToProcess.push(group);
+  }
 
-    console.log(`  Processing: ${group.docName} > ${group.headingPath || "root"}`);
+  console.log(`⏭️  Skipping ${skippedGroups} already-processed groups`);
+  console.log(`📝 ${groupsToProcess.length} groups need processing\n`);
+
+  const priorityGroups = groupsToProcess.filter(g => {
+    const combined = g.chunks.map(c => c.content).join(" ");
+    return PRIORITY_KEYWORDS.some(kw => combined.toLowerCase().includes(kw.toLowerCase()));
+  });
+  const otherGroups = groupsToProcess.filter(g => !priorityGroups.includes(g));
+  const sortedGroups = [...priorityGroups, ...otherGroups];
+
+  const batchGroups = sortedGroups.slice(0, BATCH_LIMIT);
+  console.log(`🎯 Processing ${batchGroups.length} groups this batch (${priorityGroups.length} priority)\n`);
+
+  let totalArtifacts = 0;
+  let processedGroups = 0;
+
+  for (const group of batchGroups) {
+    console.log(`  [${processedGroups + 1}/${batchGroups.length}] ${group.docName.slice(0, 40)}... > ${(group.headingPath || "root").slice(0, 50)}`);
     
     const artifacts = await extractArtifacts(group);
     
@@ -182,20 +204,27 @@ async function main() {
 
     processedGroups++;
     
-    if (processedGroups % 10 === 0) {
-      console.log(`  ... processed ${processedGroups} groups, ${totalArtifacts} artifacts`);
+    if (processedGroups % 5 === 0) {
+      console.log(`  ... ${processedGroups}/${batchGroups.length} processed, ${totalArtifacts} artifacts extracted`);
     }
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  const remaining = sortedGroups.length - batchGroups.length;
 
   console.log("\n" + "=".repeat(50));
   console.log("📊 Artifact Build Summary");
   console.log("=".repeat(50));
-  console.log(`Groups processed: ${processedGroups}`);
-  console.log(`Groups skipped (unchanged): ${skippedGroups}`);
+  console.log(`Groups processed this batch: ${processedGroups}`);
+  console.log(`Groups already processed: ${skippedGroups}`);
+  console.log(`Groups remaining: ${remaining}`);
   console.log(`Artifacts created: ${totalArtifacts}`);
   console.log(`Duration: ${duration}s`);
+  if (remaining > 0) {
+    console.log(`\n💡 Run again to process next batch of ${Math.min(remaining, BATCH_LIMIT)} groups`);
+  } else {
+    console.log(`\n✅ All groups processed!`);
+  }
   console.log("=".repeat(50));
 }
 
