@@ -69,26 +69,44 @@ export function logMissingTopic(module: string, topic: string) {
   }
 }
 
+const GERMAN_TO_ENGLISH_ROOM: Record<string, string> = {
+  "empfangsbereich": "reception",
+  "empfang": "reception",
+  "wartezimmer": "waiting",
+  "wartebereich": "waiting",
+  "behandlungszimmer": "treatment",
+  "behandlungsraum": "treatment",
+  "untersuchungsraum": "exam",
+  "labor": "lab",
+  "personalraum": "office",
+  "büro": "office",
+  "sterilisationsraum": "storage",
+  "lager": "storage"
+};
+
 export async function getRoomSizeBenchmarks(): Promise<Record<string, { min: number; max: number; optimal: number; citations: SourceCitation[] }>> {
-  const artifacts = await getBenchmarks("layout");
-  const roomTypes = ["reception", "waiting", "treatment", "exam", "lab", "office", "storage"];
-  
+  const artifacts = await getArtifacts({ module: "layout", topic: "room_size_standards" });
   const result: Record<string, { min: number; max: number; optimal: number; citations: SourceCitation[] }> = {};
   
-  for (const type of roomTypes) {
-    const artifact = artifacts.find(a => 
-      a.payload.metric?.toLowerCase().includes(type) || 
-      a.topic.toLowerCase().includes(type)
-    );
+  const roomSizesArtifact = artifacts.find(a => a.topic === "room_size_standards");
+  
+  if (roomSizesArtifact && roomSizesArtifact.payload.room_types) {
+    const roomTypes = roomSizesArtifact.payload.room_types as Record<string, { min_sqm: number; max_sqm: number; optimal_sqm: number }>;
     
-    if (artifact && artifact.payload.min !== undefined) {
-      result[type] = {
-        min: artifact.payload.min,
-        max: artifact.payload.max || artifact.payload.min * 1.5,
-        optimal: artifact.payload.optimal || (artifact.payload.min + (artifact.payload.max || artifact.payload.min * 1.5)) / 2,
-        citations: artifact.citations
+    for (const [germanName, sizes] of Object.entries(roomTypes)) {
+      const englishName = GERMAN_TO_ENGLISH_ROOM[germanName.toLowerCase()] || germanName.toLowerCase();
+      result[englishName] = {
+        min: sizes.min_sqm,
+        max: sizes.max_sqm,
+        optimal: sizes.optimal_sqm,
+        citations: roomSizesArtifact.citations
       };
-    } else {
+    }
+  }
+  
+  const fallbackTypes = ["reception", "waiting", "treatment", "exam", "lab", "office", "storage"];
+  for (const type of fallbackTypes) {
+    if (!result[type]) {
       const fallback = (SAFE_DEFAULTS.layout.roomSizes as any)[type];
       if (fallback) {
         logMissingTopic("layout", `room_size_${type}`);
@@ -104,33 +122,39 @@ export async function getStaffingBenchmarks(): Promise<{
   mfaPerDoctor: { min: number; max: number; optimal: number; citations: SourceCitation[] };
   supportPerPhysician: { min: number; max: number; optimal: number; citations: SourceCitation[] };
 }> {
-  const artifacts = await getBenchmarks("staffing");
+  const artifacts = await getArtifacts({ module: "staffing", topic: "role_ratios" });
+  const roleRatiosArtifact = artifacts.find(a => a.topic === "role_ratios");
   
-  const mfaArtifact = artifacts.find(a => 
-    a.topic.toLowerCase().includes("mfa") || 
-    a.payload.metric?.toLowerCase().includes("mfa")
-  );
-  
-  const supportArtifact = artifacts.find(a => 
-    a.topic.toLowerCase().includes("support") || 
-    a.topic.toLowerCase().includes("personal") ||
-    a.payload.metric?.toLowerCase().includes("staff")
-  );
+  if (roleRatiosArtifact && roleRatiosArtifact.payload) {
+    const payload = roleRatiosArtifact.payload as {
+      mfa_per_dentist?: number;
+      total_staff_per_dentist?: number;
+      reception_per_dentist?: number;
+      prophylaxis_per_dentist?: number;
+    };
+    
+    const mfaValue = payload.mfa_per_dentist || 2;
+    const totalValue = payload.total_staff_per_dentist || 4;
+    
+    return {
+      mfaPerDoctor: {
+        min: Math.max(1, mfaValue - 0.5),
+        max: mfaValue + 1,
+        optimal: mfaValue,
+        citations: roleRatiosArtifact.citations
+      },
+      supportPerPhysician: {
+        min: Math.max(2.5, totalValue - 1),
+        max: totalValue + 1,
+        optimal: totalValue,
+        citations: roleRatiosArtifact.citations
+      }
+    };
+  }
 
   return {
-    mfaPerDoctor: mfaArtifact ? {
-      min: mfaArtifact.payload.min || 1.0,
-      max: mfaArtifact.payload.max || 2.0,
-      optimal: mfaArtifact.payload.optimal || 1.5,
-      citations: mfaArtifact.citations
-    } : { ...SAFE_DEFAULTS.staffing.ratios.mfaPerDoctor, citations: [] },
-    
-    supportPerPhysician: supportArtifact ? {
-      min: supportArtifact.payload.min || 2.5,
-      max: supportArtifact.payload.max || 4.0,
-      optimal: supportArtifact.payload.optimal || 3.0,
-      citations: supportArtifact.citations
-    } : { ...SAFE_DEFAULTS.staffing.ratios.supportPerPhysician, citations: [] }
+    mfaPerDoctor: { ...SAFE_DEFAULTS.staffing.ratios.mfaPerDoctor, citations: [] },
+    supportPerPhysician: { ...SAFE_DEFAULTS.staffing.ratios.supportPerPhysician, citations: [] }
   };
 }
 
@@ -139,68 +163,69 @@ export async function getSchedulingDefaults(): Promise<{
   bufferMinutes: { value: number; citations: SourceCitation[] };
   maxWaitTime: { value: number; citations: SourceCitation[] };
 }> {
-  const artifacts = await getBenchmarks("scheduling");
+  const [schedulingArtifacts, dashboardArtifacts] = await Promise.all([
+    getArtifacts({ module: "scheduling" }),
+    getArtifacts({ module: "dashboard", topic: "patient_flow_metrics" })
+  ]);
   
-  const serviceTypes = ["checkup", "treatment", "cleaning", "consultation", "xray"];
   const serviceTimes: Record<string, { min: number; max: number; optimal: number; citations: SourceCitation[] }> = {};
   
-  for (const type of serviceTypes) {
-    const artifact = artifacts.find(a => 
-      a.topic.toLowerCase().includes(type) ||
-      a.payload.metric?.toLowerCase().includes(type)
-    );
-    
-    if (artifact) {
-      serviceTimes[type] = {
+  for (const artifact of schedulingArtifacts) {
+    if (artifact.topic.startsWith("service_time_")) {
+      const serviceType = artifact.topic.replace("service_time_", "");
+      serviceTimes[serviceType] = {
         min: artifact.payload.min || 15,
         max: artifact.payload.max || 60,
         optimal: artifact.payload.optimal || 30,
         citations: artifact.citations
       };
-    } else {
+    }
+  }
+  
+  const serviceTypes = ["checkup", "treatment", "cleaning", "consultation", "xray"];
+  for (const type of serviceTypes) {
+    if (!serviceTimes[type]) {
       const fallback = (SAFE_DEFAULTS.scheduling.serviceTimes as any)[type];
       if (fallback) {
-        logMissingTopic("scheduling", `service_time_${type}`);
         serviceTimes[type] = { ...fallback, citations: [] };
       }
     }
   }
 
-  const bufferArtifact = artifacts.find(a => 
-    a.topic.toLowerCase().includes("buffer") || 
-    a.topic.toLowerCase().includes("puffer")
-  );
+  const maxWaitArtifact = schedulingArtifacts.find(a => a.topic === "max_wait_time");
+  const patientFlowArtifact = dashboardArtifacts.find(a => a.topic === "patient_flow_metrics");
   
-  const waitArtifact = artifacts.find(a => 
-    a.topic.toLowerCase().includes("wartezeit") || 
-    a.topic.toLowerCase().includes("wait")
-  );
+  let bufferValue = SAFE_DEFAULTS.scheduling.bufferMinutes;
+  let bufferCitations: SourceCitation[] = [];
+  
+  if (patientFlowArtifact?.payload?.optimal_schedule_buffer_percent) {
+    bufferValue = Math.round(30 * (patientFlowArtifact.payload.optimal_schedule_buffer_percent / 100));
+    bufferCitations = patientFlowArtifact.citations;
+  }
 
   return {
     serviceTimes,
-    bufferMinutes: bufferArtifact ? {
-      value: bufferArtifact.payload.optimal || bufferArtifact.payload.min || 5,
-      citations: bufferArtifact.citations
-    } : { value: SAFE_DEFAULTS.scheduling.bufferMinutes, citations: [] },
-    maxWaitTime: waitArtifact ? {
-      value: waitArtifact.payload.max || waitArtifact.payload.optimal || 15,
-      citations: waitArtifact.citations
+    bufferMinutes: { value: bufferValue, citations: bufferCitations },
+    maxWaitTime: maxWaitArtifact ? {
+      value: maxWaitArtifact.payload.optimal || maxWaitArtifact.payload.max || 15,
+      citations: maxWaitArtifact.citations
     } : { value: SAFE_DEFAULTS.scheduling.maxWaitTime, citations: [] }
   };
 }
 
-export async function getDashboardRules(): Promise<ArtifactResult<RulePayload>[]> {
-  const rules = await getRules("dashboard");
+export async function getDashboardRules(): Promise<ArtifactResult[]> {
+  const artifacts = await getArtifacts({ module: "dashboard" });
   
-  if (rules.length === 0) {
-    logMissingTopic("dashboard", "health_score_rules");
+  if (artifacts.length === 0) {
+    logMissingTopic("dashboard", "health_score_weights");
   }
   
-  return rules;
+  return artifacts;
 }
 
-export async function getLayoutRules(): Promise<ArtifactResult<RulePayload>[]> {
-  return getRules("layout");
+export async function getLayoutRules(): Promise<ArtifactResult[]> {
+  const artifacts = await getArtifacts({ module: "layout" });
+  return artifacts.filter(a => a.topic !== "room_size_standards");
 }
 
 export async function getAllArtifactsByModule(module: string): Promise<{
@@ -223,5 +248,5 @@ export function formatCitation(citation: SourceCitation): string {
 }
 
 export function formatCitations(citations: SourceCitation[]): string[] {
-  return [...new Set(citations.map(formatCitation))];
+  return Array.from(new Set(citations.map(formatCitation)));
 }
