@@ -51,20 +51,25 @@ export const knowledgeSources = pgTable("knowledge_sources", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
   fileName: text("file_name").notNull(),
+  fileHash: text("file_hash"),
   category: text("category").notNull(),
   tags: text("tags").array().notNull(),
   description: text("description"),
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const knowledgeChunks = pgTable("knowledge_chunks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sourceId: varchar("source_id").notNull().references(() => knowledgeSources.id, { onDelete: "cascade" }),
+  headingPath: text("heading_path"),
   chunkIndex: integer("chunk_index").notNull(),
   content: text("content").notNull(),
+  contentHash: text("content_hash"),
   tokens: integer("tokens").notNull(),
   embedding: vector("embedding", { dimensions: 1536 }),
   keyPoints: text("key_points").array(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

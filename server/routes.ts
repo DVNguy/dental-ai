@@ -11,6 +11,7 @@ import { runSimulation, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
 import { generateCoachResponse } from "./ai/coachChat";
+import { queryRAG, retrieveKnowledgeChunks } from "./ai/ragQuery";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -313,14 +314,51 @@ export async function registerRoutes(
   app.post("/api/ai/coach-chat", async (req, res) => {
     try {
       const { question } = coachChatSchema.parse(req.body);
-      const response = await generateCoachResponse(question);
-      res.json(response);
+      const response = await queryRAG(question, 5);
+      res.json({
+        answer: response.answer,
+        sources: response.kbChunks.map(c => ({
+          title: c.docName.replace(/\.docx$/i, "").replace(/[_-]/g, " "),
+          category: c.headingPath || "Allgemein"
+        })),
+        webResults: response.webResults,
+        kbCoverage: response.kbCoverage
+      });
     } catch (error) {
       console.error("Coach chat error:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid request" });
       }
       res.status(500).json({ error: "Failed to generate response" });
+    }
+  });
+
+  const ragQuerySchema = z.object({
+    question: z.string().min(1),
+    topK: z.number().min(1).max(20).optional().default(5),
+  });
+
+  app.post("/api/v1/rag/query", async (req, res) => {
+    try {
+      const { question, topK } = ragQuerySchema.parse(req.body);
+      const response = await queryRAG(question, topK);
+      res.json({
+        answer: response.answer,
+        retrievedChunks: response.kbChunks.map(c => ({
+          id: c.id,
+          docName: c.docName,
+          headingPath: c.headingPath,
+          score: c.score
+        })),
+        webResults: response.webResults,
+        kbCoverage: response.kbCoverage
+      });
+    } catch (error) {
+      console.error("RAG query error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid query parameters" });
+      }
+      res.status(500).json({ error: "Failed to process query" });
     }
   });
 
