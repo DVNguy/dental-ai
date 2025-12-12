@@ -8,6 +8,10 @@ import {
   evaluateStaffingRatios,
   pixelsToSqM
 } from "./ai/benchmarks";
+import {
+  getKnowledgePoweredScheduling,
+  getKnowledgePoweredStaffing
+} from "./ai/artifactBenchmarks";
 
 export interface SimulationParameters {
   patientVolume: number;

@@ -1,11 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { 
-  insertPracticeSchema, 
-  insertRoomSchema, 
-  insertStaffSchema, 
-  insertSimulationSchema 
+import {
+  insertPracticeSchema,
+  insertRoomSchema,
+  insertStaffSchema,
+  insertSimulationSchema,
 } from "@shared/schema";
 import { runSimulation, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
@@ -16,25 +16,35 @@ import {
   getKnowledgePoweredRoomSizes,
   getKnowledgePoweredStaffing,
   getKnowledgePoweredScheduling,
-  getHealthScoreDrivers
+  getHealthScoreDrivers,
 } from "./ai/artifactBenchmarks";
 import { z } from "zod";
 
+// ... deine existierenden Imports (Express, http, storage, schema, etc.) ...
+// NEU: Imports für den Consultant Bot
+import { OpenAI } from "openai";
+import { tavily } from "@tavily/core";
+import { DENTAL_BENCHMARKS } from "./benchmark"; // Wichtig: Singular "./benchmark", wie in deinem Screenshot
+
+// NEU: Clients initialisieren
+// Stelle sicher, dass diese Keys in den Replit Secrets (.env) sind!
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY || "tvly-DUMMY" }); // Fallback verhindert Crash beim Start
+
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
-  
   app.get("/api/practices/:id", async (req, res) => {
     try {
       const practice = await storage.getPractice(req.params.id);
       if (!practice) {
         return res.status(404).json({ error: "Practice not found" });
       }
-      
+
       const rooms = await storage.getRoomsByPracticeId(req.params.id);
       const staff = await storage.getStaffByPracticeId(req.params.id);
-      
+
       res.json({ practice, rooms, staff });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch practice" });
@@ -57,12 +67,15 @@ export async function registerRoutes(
       if (typeof budget !== "number") {
         return res.status(400).json({ error: "Budget must be a number" });
       }
-      
-      const practice = await storage.updatePracticeBudget(req.params.id, budget);
+
+      const practice = await storage.updatePracticeBudget(
+        req.params.id,
+        budget,
+      );
       if (!practice) {
         return res.status(404).json({ error: "Practice not found" });
       }
-      
+
       res.json(practice);
     } catch (error) {
       res.status(500).json({ error: "Failed to update budget" });
@@ -167,7 +180,9 @@ export async function registerRoutes(
 
   app.get("/api/practices/:id/simulations", async (req, res) => {
     try {
-      const simulations = await storage.getSimulationsByPracticeId(req.params.id);
+      const simulations = await storage.getSimulationsByPracticeId(
+        req.params.id,
+      );
       res.json(simulations);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch simulations" });
@@ -182,8 +197,9 @@ export async function registerRoutes(
 
   app.post("/api/simulations/run", async (req, res) => {
     try {
-      const { practiceId, patientVolume, operatingHours } = runSimulationSchema.parse(req.body);
-      
+      const { practiceId, patientVolume, operatingHours } =
+        runSimulationSchema.parse(req.body);
+
       const practice = await storage.getPractice(practiceId);
       if (!practice) {
         return res.status(404).json({ error: "Practice not found" });
@@ -192,7 +208,10 @@ export async function registerRoutes(
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const staff = await storage.getStaffByPracticeId(practiceId);
 
-      const parameters: SimulationParameters = { patientVolume, operatingHours };
+      const parameters: SimulationParameters = {
+        patientVolume,
+        operatingHours,
+      };
       const result = runSimulation(rooms, staff, parameters);
 
       const simulation = await storage.createSimulation({
@@ -220,8 +239,10 @@ export async function registerRoutes(
 
   app.post("/api/ai/analyze-layout", async (req, res) => {
     try {
-      const { practiceId, operatingHours } = analyzeLayoutSchema.parse(req.body);
-      
+      const { practiceId, operatingHours } = analyzeLayoutSchema.parse(
+        req.body,
+      );
+
       const practice = await storage.getPractice(practiceId);
       if (!practice) {
         return res.status(404).json({ error: "Practice not found" });
@@ -249,7 +270,7 @@ export async function registerRoutes(
   app.post("/api/ai/recommend", async (req, res) => {
     try {
       const { practiceId, question } = recommendSchema.parse(req.body);
-      
+
       const practice = await storage.getPractice(practiceId);
       if (!practice) {
         return res.status(404).json({ error: "Practice not found" });
@@ -258,7 +279,11 @@ export async function registerRoutes(
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const staff = await storage.getStaffByPracticeId(practiceId);
 
-      const recommendation = await getQuickRecommendation(rooms, staff, question);
+      const recommendation = await getQuickRecommendation(
+        rooms,
+        staff,
+        question,
+      );
       res.json({ recommendation });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -293,7 +318,6 @@ export async function registerRoutes(
     }
   });
 
-
   const searchKnowledgeSchema = z.object({
     query: z.string().min(1),
     limit: z.number().min(1).max(20).optional().default(5),
@@ -323,12 +347,12 @@ export async function registerRoutes(
       const response = await queryRAG(question, 5);
       res.json({
         answer: response.answer,
-        sources: response.kbChunks.map(c => ({
+        sources: response.kbChunks.map((c) => ({
           title: c.docName.replace(/\.docx$/i, "").replace(/[_-]/g, " "),
-          category: c.headingPath || "Allgemein"
+          category: c.headingPath || "Allgemein",
         })),
         webResults: response.webResults,
-        kbCoverage: response.kbCoverage
+        kbCoverage: response.kbCoverage,
       });
     } catch (error) {
       console.error("Coach chat error:", error);
@@ -350,14 +374,14 @@ export async function registerRoutes(
       const response = await queryRAG(question, topK);
       res.json({
         answer: response.answer,
-        retrievedChunks: response.kbChunks.map(c => ({
+        retrievedChunks: response.kbChunks.map((c) => ({
           id: c.id,
           docName: c.docName,
           headingPath: c.headingPath,
-          score: c.score
+          score: c.score,
         })),
         webResults: response.webResults,
-        kbCoverage: response.kbCoverage
+        kbCoverage: response.kbCoverage,
       });
     } catch (error) {
       console.error("RAG query error:", error);
@@ -374,7 +398,7 @@ export async function registerRoutes(
         getKnowledgePoweredRoomSizes(),
         getKnowledgePoweredStaffing(),
         getKnowledgePoweredScheduling(),
-        getHealthScoreDrivers()
+        getHealthScoreDrivers(),
       ]);
 
       res.json({
@@ -382,13 +406,118 @@ export async function registerRoutes(
         staffing,
         scheduling,
         healthScoreWeights: healthScore.weights,
-        healthScoreFromKnowledge: healthScore.fromKnowledge
+        healthScoreFromKnowledge: healthScore.fromKnowledge,
       });
     } catch (error) {
       console.error("Failed to fetch benchmarks:", error);
       res.status(500).json({ error: "Failed to fetch benchmarks" });
     }
   });
+
+  // ---------------------------------------------------------
+  // NEU: Der "Smart Consultant" mit Benchmarks & Web-Suche
+  // ---------------------------------------------------------
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message } = req.body;
+
+      // 1. System Prompt mit den harten Fakten (Benchmarks) anreichern
+      const benchmarkContext = JSON.stringify(DENTAL_BENCHMARKS, null, 2);
+
+      const systemPrompt = `
+      Du bist ein hochspezialisierter KI-Unternehmensberater für Zahnarztpraxen.
+
+      DEINE GRUNDLAGE (GROUND TRUTH):
+      Nutze für Berechnungen und Standards ZWINGEND diese Benchmarks. Rate nicht, wenn Daten hier stehen:
+      ${benchmarkContext}
+
+      INSTRUKTIONEN ZUR SUCHE:
+      - Nutze das 'web_search' Tool für aktuelle Trends (2024/2025), Gesetzesänderungen oder Marktanalysen.
+      - Nutze die Benchmarks für operative Fragen (Raumgrößen, Umsatz, Personal).
+      - Antworte professionell, präzise und immer auf Deutsch.
+      `;
+
+      // 2. Definition der Tools (Websuche)
+      const tools = [
+        {
+          type: "function",
+          function: {
+            name: "web_search",
+            description:
+              "Sucht im Internet nach aktuellen Informationen, Nachrichten oder Fakten.",
+            parameters: {
+              type: "object",
+              properties: {
+                query: { type: "string", description: "Der Suchbegriff" },
+              },
+              required: ["query"],
+            },
+          },
+        },
+      ];
+
+      // 3. Initialer Aufruf an GPT-4o
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message },
+      ];
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: messages as any,
+        tools: tools as any,
+        tool_choice: "auto",
+      });
+
+      const responseMessage = completion.choices[0].message;
+
+      // 4. Prüfen: Will die KI ein Tool nutzen?
+      if (responseMessage.tool_calls) {
+        // KI will suchen -> Wir führen die Suche aus
+        const toolCall = responseMessage.tool_calls[0];
+
+        if (toolCall.function.name === "web_search") {
+          const args = JSON.parse(toolCall.function.arguments);
+          console.log(`🔎 KI sucht nach: ${args.query}`);
+
+          // Tavily Suche ausführen
+          let searchResult;
+          try {
+            searchResult = await tvly.search(args.query, {
+              searchDepth: "basic",
+            });
+          } catch (e) {
+            searchResult = { error: "Suche fehlgeschlagen" };
+          }
+
+          // Verlauf aktualisieren
+          messages.push(responseMessage as any); // Die Absicht der KI
+          messages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(searchResult), // Das Ergebnis der Suche
+          } as any);
+
+          // 5. Zweiter Aufruf: KI verarbeitet das Suchergebnis
+          const secondResponse = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: messages as any,
+          });
+
+          return res.json({
+            response: secondResponse.choices[0].message.content,
+          });
+        }
+      }
+
+      // Fallback: Keine Suche nötig
+      res.json({ response: responseMessage.content });
+    } catch (error) {
+      console.error("Smart Consultant Error:", error);
+      res.status(500).json({ error: "Fehler im KI-Berater Modul" });
+    }
+  });
+  // ---------------------------------------------------------
 
   return httpServer;
 }
