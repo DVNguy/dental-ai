@@ -1,0 +1,86 @@
+import os
+from openai import OpenAI
+from tavily import TavilyClient
+import json
+
+# 1. API Keys aus den Replit "Secrets" laden
+# Du musst in Replit unter "Secrets" (das Schloss-Icon) zwei Einträge machen:
+# OPENAI_API_KEY und TAVILY_API_KEY
+client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+tavily = TavilyClient(api_key=os.environ['TAVILY_API_KEY'])
+
+# 2. Das "Werkzeug" definieren (Damit GPT weiß, dass es suchen KANN)
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "Sucht im Internet nach aktuellen Informationen, Fakten oder Nachrichten.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Der Suchbegriff (z.B. 'Wetter Berlin heute')"}
+            },
+            "required": ["query"]
+        }
+    }
+}]
+
+def run_chat(user_input):
+    # 3. Dein System Prompt (Hier kommt deine Anweisung rein!)
+    system_prompt = """
+    Du bist ein hilfreicher Assistent.
+    WICHTIG: Wenn du nach aktuellen Informationen gefragt wirst, nutze das 'web_search' Tool.
+    Verlasse dich bei News nicht auf dein Trainingswissen. Nutze nur seriöse Quellen.
+    """
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input}
+    ]
+
+    # Erster Aufruf an die KI
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        tools=tools,
+        tool_choice="auto"  # Die KI entscheidet selbst, ob sie suchen muss
+    )
+
+    response_message = response.choices[0].message
+
+    # 4. Prüfen: Will die KI suchen?
+    if response_message.tool_calls:
+        print("🤖 KI möchte im Internet suchen...")
+        
+        # Das Tool ausführen
+        tool_call = response_message.tool_calls[0]
+        function_args = json.loads(tool_call.function.arguments)
+        search_query = function_args.get("query")
+        
+        # Die echte Suche über Tavily
+        search_result = tavily.search(query=search_query, search_depth="basic")
+        
+        # Das Suchergebnis als "Nachricht" verpacken
+        messages.append(response_message) # Die Anfrage der KI
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "name": "web_search",
+            "content": json.dumps(search_result) # Das Ergebnis der Suche
+        })
+
+        # 5. Zweiter Aufruf: KI verarbeitet das Suchergebnis und antwortet dir
+        final_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+        return final_response.choices[0].message.content
+    else:
+        # Wenn keine Suche nötig war
+        return response_message.content
+
+# Testlauf
+if __name__ == "__main__":
+    frage = input("Was möchtest du wissen? ")
+    antwort = run_chat(frage)
+    print("\nGPT-4o sagt:\n" + antwort)
