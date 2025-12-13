@@ -1,0 +1,61 @@
+Implementiere Step C: Layout-Effizienzmodell v1 (Flow/Motion Waste) + Endpoint + minimal UI.
+
+C1) Neues Analyse-Modul (Server)
+- Lege server/ai/layoutEfficiency.ts an mit:
+  export interface LayoutFlowBreakdown { ... }
+  export function computeLayoutEfficiency(rooms: Room[]): {
+    score: number; // 0-100
+    breakdown: {
+      patientFlowMeters: number;
+      staffMotionMeters: number;
+      steriLoopMeters: number;
+      crossFloorPenaltyMeters: number;
+      privacyRisk: boolean;
+    };
+    issues: Array<{ severity:"critical"|"high"|"medium"|"low"; code:string; title:string; detail:string; current:number; target?:number; unit:string }>;
+    tips: string[]; // top 3-6
+  }
+
+Modell-Logik (v1, deterministisch, keine LLM Calls):
+- Definiere Flows als Sequenzen von Raumtypen:
+  - Patient: reception -> waiting -> exam -> reception
+  - Staff Motion: exam -> office -> exam (administrativ)
+  - Steri Loop: exam -> steri -> exam (wenn steri nicht existiert: nutze lab als fallback)
+  - Lab Loop: exam -> lab -> exam
+- Für jede Sequenz:
+  - Berechne durchschnittliche Distanz (Meter) zwischen den nächsten Nodes (über alle Räume des Typs).
+  - Berücksichtige floor penalty aus Step B.
+- Score:
+  - Start 100
+  - Subtrahiere gewichtete Penalties je Flow (z.B. patient 0.35, steri 0.35, staff 0.2, lab 0.1)
+  - Fehlen von Room Types erzeugt harte Penalties + Issue.
+- Datenschutz/Reception:
+  - Privacy Constraint: waiting zu nah an reception -> wenn Distanz < 1.5m => privacyRisk true, Issue "Diskretionszone".
+- Ergebnis clamp 0..100
+
+C2) Simulation integrieren
+- In server/simulation.ts:
+  - Ersetze/erweitere calculateEfficiencyScore => nutze computeLayoutEfficiency(rooms).score
+  - Optional: speichere breakdown in SimulationResult nicht, aber gebe es über neues Endpoint aus.
+
+C3) API Endpoint
+- In server/routes.ts:
+  - POST /api/layout/efficiency { practiceId }
+  - Holt rooms via storage.getRoomsByPracticeId(practiceId)
+  - Res.json(computeLayoutEfficiency(rooms))
+
+C4) Minimal UI
+- In client/src/pages/LayoutEditor.tsx (oder Dashboard, wenn einfacher):
+  - useQuery auf /api/layout/efficiency
+  - Zeige eine kleine Card (rechts oben oder Sidebar unten):
+    - “Layout Effizienz: XX/100”
+    - 3 wichtigste Tipps (tips array)
+    - Optional: Badge wenn privacyRisk true
+
+C5) Tests / Manuell
+- 1) Ohne waiting room: Score sinkt, Issue wird angezeigt
+- 2) waiting sehr nah an reception: privacyRisk true
+- 3) rooms auf unterschiedlichen floors: crossFloorPenalty greift
+- 4) keine Performance Regression: Query nur bei Änderungen debounced (nicht pro Drag Pixel)
+
+Keep UI minimal, kein Redesign, keine großen Rewrites.
