@@ -98,8 +98,30 @@ export const SAFE_DEFAULTS = {
       reception: { min: 8, max: 14, optimal: 10 },
       waiting: { min: 15, max: 35, optimal: 22 },
       treatment: { min: 9, max: 12, optimal: 10 },
+      exam: { min: 9, max: 12, optimal: 10 },
       lab: { min: 8, max: 15, optimal: 10 },
-      office: { min: 10, max: 18, optimal: 14 }
+      office: { min: 10, max: 18, optimal: 14 },
+      storage: { min: 4, max: 10, optimal: 6 }
+    },
+    distanceGuidelines: {
+      receptionToWaiting: { maxMeters: 10, optimal: 5, source: "DIN 18040 Barrierefreies Bauen" },
+      waitingToExam: { maxMeters: 25, optimal: 12, source: "Praxisbegehung Laufwege" },
+      examToLab: { maxMeters: 15, optimal: 8, source: "RKI Probenhandhabung Richtlinien" },
+      examToExam: { maxMeters: 10, optimal: 5, source: "Praxiseffizienz Standards" }
+    },
+    zoningRules: {
+      onStage: {
+        zones: ["reception", "waiting"],
+        description: "Patientenkontaktbereich - gepflegt, einladend, ruhig"
+      },
+      offStage: {
+        zones: ["lab", "storage", "office"],
+        description: "Interne Arbeitsbereiche - effizient, funktional"
+      },
+      clinical: {
+        zones: ["exam", "treatment"],
+        description: "Klinische Bereiche - steril, professionell"
+      }
     }
   },
   staffing: {

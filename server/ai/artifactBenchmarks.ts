@@ -406,9 +406,163 @@ export async function getHealthScoreDrivers(): Promise<{
   };
 }
 
+export interface DistanceGuideline {
+  maxMeters: number;
+  optimal: number;
+  source: string;
+  citations: SourceCitation[];
+  fromKnowledge: boolean;
+}
+
+export interface ZoningRule {
+  zones: string[];
+  description: string;
+  citations: SourceCitation[];
+  fromKnowledge: boolean;
+}
+
+export interface KnowledgePoweredLayout {
+  roomSizes: Record<string, KnowledgePoweredRoomSize>;
+  distanceGuidelines: {
+    receptionToWaiting: DistanceGuideline;
+    waitingToExam: DistanceGuideline;
+    examToLab: DistanceGuideline;
+    examToExam: DistanceGuideline;
+  };
+  zoningRules: {
+    onStage: ZoningRule;
+    offStage: ZoningRule;
+    clinical: ZoningRule;
+  };
+  fromKnowledge: boolean;
+}
+
+let cachedLayout: KnowledgePoweredLayout | null = null;
+let layoutCacheExpiry = 0;
+
+export async function getKnowledgePoweredLayout(): Promise<KnowledgePoweredLayout> {
+  if (Date.now() < layoutCacheExpiry && cachedLayout) {
+    return cachedLayout;
+  }
+
+  const [roomSizes, layoutArtifacts] = await Promise.all([
+    getKnowledgePoweredRoomSizes(),
+    getLayoutRules()
+  ]);
+
+  const distanceArtifact = layoutArtifacts.find(a => 
+    a.topic.toLowerCase().includes("distance") || 
+    a.topic.toLowerCase().includes("entfernung") ||
+    a.topic.toLowerCase().includes("laufweg")
+  );
+
+  const zoningArtifact = layoutArtifacts.find(a => 
+    a.topic.toLowerCase().includes("zoning") || 
+    a.topic.toLowerCase().includes("bereich") ||
+    a.topic.toLowerCase().includes("zone")
+  );
+
+  const hasKnowledgeDistances = !!distanceArtifact;
+  const hasKnowledgeZoning = !!zoningArtifact;
+
+  const distanceGuidelines = {
+    receptionToWaiting: buildDistanceGuideline(
+      distanceArtifact?.payload?.receptionToWaiting,
+      SAFE_DEFAULTS.layout.distanceGuidelines.receptionToWaiting,
+      distanceArtifact?.citations || []
+    ),
+    waitingToExam: buildDistanceGuideline(
+      distanceArtifact?.payload?.waitingToExam,
+      SAFE_DEFAULTS.layout.distanceGuidelines.waitingToExam,
+      distanceArtifact?.citations || []
+    ),
+    examToLab: buildDistanceGuideline(
+      distanceArtifact?.payload?.examToLab,
+      SAFE_DEFAULTS.layout.distanceGuidelines.examToLab,
+      distanceArtifact?.citations || []
+    ),
+    examToExam: buildDistanceGuideline(
+      distanceArtifact?.payload?.examToExam,
+      SAFE_DEFAULTS.layout.distanceGuidelines.examToExam,
+      distanceArtifact?.citations || []
+    )
+  };
+
+  const zoningRules = {
+    onStage: buildZoningRule(
+      zoningArtifact?.payload?.onStage,
+      SAFE_DEFAULTS.layout.zoningRules.onStage,
+      zoningArtifact?.citations || []
+    ),
+    offStage: buildZoningRule(
+      zoningArtifact?.payload?.offStage,
+      SAFE_DEFAULTS.layout.zoningRules.offStage,
+      zoningArtifact?.citations || []
+    ),
+    clinical: buildZoningRule(
+      zoningArtifact?.payload?.clinical,
+      SAFE_DEFAULTS.layout.zoningRules.clinical,
+      zoningArtifact?.citations || []
+    )
+  };
+
+  cachedLayout = {
+    roomSizes,
+    distanceGuidelines,
+    zoningRules,
+    fromKnowledge: hasKnowledgeDistances || hasKnowledgeZoning || Object.values(roomSizes).some(r => r.fromKnowledge)
+  };
+
+  layoutCacheExpiry = Date.now() + CACHE_TTL;
+  return cachedLayout;
+}
+
+function buildDistanceGuideline(
+  knowledgeData: { maxMeters?: number; optimal?: number; source?: string } | undefined,
+  fallback: { maxMeters: number; optimal: number; source: string },
+  citations: SourceCitation[]
+): DistanceGuideline {
+  if (knowledgeData && (knowledgeData.maxMeters || knowledgeData.optimal)) {
+    return {
+      maxMeters: knowledgeData.maxMeters ?? fallback.maxMeters,
+      optimal: knowledgeData.optimal ?? fallback.optimal,
+      source: knowledgeData.source ?? (formatCitations(citations).join(", ") || fallback.source),
+      citations,
+      fromKnowledge: true
+    };
+  }
+  return {
+    ...fallback,
+    citations: [],
+    fromKnowledge: false
+  };
+}
+
+function buildZoningRule(
+  knowledgeData: { zones?: string[]; description?: string } | undefined,
+  fallback: { zones: string[]; description: string },
+  citations: SourceCitation[]
+): ZoningRule {
+  if (knowledgeData && knowledgeData.zones) {
+    return {
+      zones: knowledgeData.zones,
+      description: knowledgeData.description ?? fallback.description,
+      citations,
+      fromKnowledge: true
+    };
+  }
+  return {
+    ...fallback,
+    citations: [],
+    fromKnowledge: false
+  };
+}
+
 export function clearCache() {
   cachedRoomSizes = null;
   cachedStaffing = null;
   cachedScheduling = null;
+  cachedLayout = null;
   cacheExpiry = 0;
+  layoutCacheExpiry = 0;
 }

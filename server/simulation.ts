@@ -3,14 +3,15 @@ import {
   ROOM_SIZE_STANDARDS,
   STAFFING_RATIOS,
   PATIENT_FLOW_METRICS,
-  LAYOUT_EFFICIENCY_PRINCIPLES,
   evaluateRoomSize,
   evaluateStaffingRatios,
   pixelsToSqM
 } from "./ai/benchmarks";
 import {
   getKnowledgePoweredScheduling,
-  getKnowledgePoweredStaffing
+  getKnowledgePoweredStaffing,
+  getKnowledgePoweredLayout,
+  type KnowledgePoweredLayout
 } from "./ai/artifactBenchmarks";
 import { 
   normalizeRoomType, 
@@ -43,8 +44,14 @@ function getRoomCenter(room: Room): { x: number; y: number } {
   };
 }
 
-function calculateEfficiencyScore(rooms: Room[], scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
+async function calculateEfficiencyScore(
+  rooms: Room[], 
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER,
+  layoutConfig?: KnowledgePoweredLayout
+): Promise<number> {
   if (rooms.length === 0) return 0;
+
+  const layout = layoutConfig || await getKnowledgePoweredLayout();
 
   const roomsByType = new Map<string, Room[]>();
   rooms.forEach(room => {
@@ -69,7 +76,7 @@ function calculateEfficiencyScore(rooms: Room[], scalePxPerMeter: number = DEFAU
     const distancePx = calculateDistancePx(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
     const distanceM = pxToMeters(distancePx, scalePxPerMeter);
     
-    const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.receptionToWaiting;
+    const benchmark = layout.distanceGuidelines.receptionToWaiting;
     if (distanceM <= benchmark.optimal) {
       score += 12;
     } else if (distanceM <= benchmark.maxMeters) {
@@ -87,7 +94,7 @@ function calculateEfficiencyScore(rooms: Room[], scalePxPerMeter: number = DEFAU
     }, 0) / examRooms.length;
     
     const distanceM = pxToMeters(avgDistancePx, scalePxPerMeter);
-    const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.waitingToExam;
+    const benchmark = layout.distanceGuidelines.waitingToExam;
     
     if (distanceM <= benchmark.optimal) {
       score += 15;
@@ -115,7 +122,7 @@ function calculateEfficiencyScore(rooms: Room[], scalePxPerMeter: number = DEFAU
     }, 0) / examRooms.length;
     
     const distanceM = pxToMeters(avgDistancePx, scalePxPerMeter);
-    const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.examToLab;
+    const benchmark = layout.distanceGuidelines.examToLab;
     
     if (distanceM <= benchmark.optimal) {
       score += 10;
@@ -279,10 +286,13 @@ export async function runSimulation(
   staff: Staff[],
   parameters: SimulationParameters
 ): Promise<SimulationResult> {
-  const schedulingDefaults = await loadSchedulingDefaults();
+  const [schedulingDefaults, layoutConfig] = await Promise.all([
+    loadSchedulingDefaults(),
+    getKnowledgePoweredLayout()
+  ]);
   const scale = parameters.layoutScalePxPerMeter || DEFAULT_LAYOUT_SCALE_PX_PER_METER;
   
-  const efficiencyScore = calculateEfficiencyScore(rooms, scale);
+  const efficiencyScore = await calculateEfficiencyScore(rooms, scale, layoutConfig);
   const harmonyScore = calculateHarmonyScore(staff, rooms);
   const patientCapacity = calculatePatientCapacity(rooms, staff, parameters.operatingHours, schedulingDefaults);
   const waitTime = calculateWaitTime(
