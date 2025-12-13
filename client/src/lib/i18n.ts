@@ -329,7 +329,7 @@ const resources = {
 
       "rooms.reception": "Empfang",
       "rooms.waiting": "Wartezimmer",
-      "rooms.exam": "Behandlungsraum",
+      "rooms.exam": "Sprechzimmer",
       "rooms.lab": "Labor",
       "rooms.office": "Arztzimmer",
       "rooms.sterilization": "Sterilisation",
@@ -406,7 +406,7 @@ const resources = {
       "benchmarks.supportStaffDesc": "Optimales Verhältnis ist 2,0 Hilfspersonal pro Arzt (MGMA-Richtwerte). Fügen Sie Ärzte und Hilfspersonal hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
       "benchmarks.nurseToDoctor": "Pflege-Arzt-Verhältnis",
       "benchmarks.nurseToDoctorDesc": "Optimales Verhältnis ist 1,5 Krankenschwestern pro Arzt (American Nurses Association). Fügen Sie Ärzte und Krankenschwestern hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
-      "benchmarks.examRoomsPerProvider": "Behandlungsräume pro Arzt",
+      "benchmarks.examRoomsPerProvider": "Zimmer pro Arzt",
       "benchmarks.examRoomsPerProviderDesc": "Optimales Verhältnis ist 2-3 Behandlungsräume pro Arzt (ADA-Standards). Fügen Sie Behandlungsräume und Ärzte hinzu, um Ihr aktuelles Verhältnis zu berechnen.",
       
       "images.simulationView": "Simulationsansicht"
