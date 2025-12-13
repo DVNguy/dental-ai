@@ -13,6 +13,7 @@ export const practices = pgTable("practices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   budget: integer("budget").notNull().default(50000),
+  layoutScalePxPerMeter: integer("layout_scale_px_per_meter").notNull().default(50),
 });
 
 export const rooms = pgTable("rooms", {

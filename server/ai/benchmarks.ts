@@ -157,21 +157,31 @@ export const INDUSTRY_BENCHMARKS = {
   }
 };
 
-export function pixelsToSqM(pixels: number, scale: number = 0.001): number {
-  return Math.round(pixels * scale * 10) / 10;
+import { pxAreaToSqM, pxToMeters, metersToPx, normalizeRoomType, DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
+
+export function pixelsToSqM(widthPx: number, heightPx: number, scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
+  return pxAreaToSqM(widthPx, heightPx, scalePxPerMeter);
 }
 
-export function sqMToPixels(sqM: number, scale: number = 0.001): number {
-  return Math.round(sqM / scale);
+export function sqMToPixels(sqM: number, scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
+  const sideM = Math.sqrt(sqM);
+  const sidePx = metersToPx(sideM, scalePxPerMeter);
+  return Math.round(sidePx * sidePx);
 }
 
-export function evaluateRoomSize(type: string, widthPx: number, heightPx: number): {
+export function evaluateRoomSize(
+  type: string, 
+  widthPx: number, 
+  heightPx: number,
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER
+): {
   score: number;
   assessment: "undersized" | "optimal" | "oversized";
   actualSqM: number;
   recommendation: string;
 } {
-  const standard = ROOM_SIZE_STANDARDS[type];
+  const normalizedType = normalizeRoomType(type);
+  const standard = ROOM_SIZE_STANDARDS[normalizedType];
   if (!standard) {
     return {
       score: 50,
@@ -181,8 +191,7 @@ export function evaluateRoomSize(type: string, widthPx: number, heightPx: number
     };
   }
 
-  const areaPx = widthPx * heightPx;
-  const actualSqM = pixelsToSqM(areaPx);
+  const actualSqM = pxAreaToSqM(widthPx, heightPx, scalePxPerMeter);
 
   let score: number;
   let assessment: "undersized" | "optimal" | "oversized";

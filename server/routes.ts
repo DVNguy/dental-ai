@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { runSimulation, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
+import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
 import { generateCoachResponse } from "./ai/coachChat";
 import { queryRAG, retrieveKnowledgeChunks } from "./ai/ragQuery";
@@ -211,6 +212,7 @@ export async function registerRoutes(
       const parameters: SimulationParameters = {
         patientVolume,
         operatingHours,
+        layoutScalePxPerMeter: practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER,
       };
       const result = await runSimulation(rooms, staff, parameters);
 
@@ -251,7 +253,7 @@ export async function registerRoutes(
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const staff = await storage.getStaffByPracticeId(practiceId);
 
-      const analysis = await analyzeLayout(rooms, staff, operatingHours);
+      const analysis = await analyzeLayout(rooms, staff, operatingHours, practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER);
       res.json(analysis);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -283,6 +285,7 @@ export async function registerRoutes(
         rooms,
         staff,
         question,
+        practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER,
       );
       res.json({ recommendation });
     } catch (error) {

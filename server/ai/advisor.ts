@@ -12,6 +12,7 @@ import {
   getLayoutRecommendations,
   pixelsToSqM
 } from "./benchmarks";
+import { pxToMeters, normalizeRoomType, DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge, formatKnowledgeContext } from "./knowledgeProcessor";
 import {
   evaluateRoomSizeWithKnowledge,
@@ -75,19 +76,16 @@ function getRoomCenter(room: Room): { x: number; y: number } {
   };
 }
 
-function pixelsToMeters(pixels: number): number {
-  return pixels * 0.03;
-}
-
-function calculateLayoutEfficiencyScore(rooms: Room[]): number {
+function calculateLayoutEfficiencyScore(rooms: Room[], scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
   if (rooms.length === 0) return 0;
 
   const roomsByType = new Map<string, Room[]>();
   rooms.forEach(room => {
-    if (!roomsByType.has(room.type)) {
-      roomsByType.set(room.type, []);
+    const normalizedType = normalizeRoomType(room.type);
+    if (!roomsByType.has(normalizedType)) {
+      roomsByType.set(normalizedType, []);
     }
-    roomsByType.get(room.type)!.push(room);
+    roomsByType.get(normalizedType)!.push(room);
   });
 
   let score = 50;
@@ -101,7 +99,7 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
     const recCenter = getRoomCenter(reception);
     const waitCenter = getRoomCenter(waiting);
     const distancePx = calculateDistance(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
-    const distanceM = pixelsToMeters(distancePx);
+    const distanceM = pxToMeters(distancePx, scalePxPerMeter);
     
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.receptionToWaiting;
     if (distanceM <= benchmark.optimal) {
@@ -120,7 +118,7 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
       return sum + calculateDistance(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceM = pixelsToMeters(avgDistance);
+    const distanceM = pxToMeters(avgDistance, scalePxPerMeter);
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.waitingToExam;
     
     if (distanceM <= benchmark.optimal) {
@@ -139,7 +137,7 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
       return sum + calculateDistance(labCenter.x, labCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceM = pixelsToMeters(avgDistance);
+    const distanceM = pxToMeters(avgDistance, scalePxPerMeter);
     const benchmark = LAYOUT_EFFICIENCY_PRINCIPLES.distanceGuidelines.examToLab;
     
     if (distanceM <= benchmark.optimal) {
@@ -158,10 +156,10 @@ function calculateLayoutEfficiencyScore(rooms: Room[]): number {
   return Math.max(0, Math.min(100, score));
 }
 
-async function analyzeRoomsWithKnowledge(rooms: Room[]): Promise<RoomAnalysis[]> {
+async function analyzeRoomsWithKnowledge(rooms: Room[], scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): Promise<RoomAnalysis[]> {
   const analyses = await Promise.all(
     rooms.map(async (room) => {
-      const evaluation = await evaluateRoomSizeWithKnowledge(room.type, room.width, room.height);
+      const evaluation = await evaluateRoomSizeWithKnowledge(room.type, room.width, room.height, scalePxPerMeter);
       return {
         roomId: room.id,
         roomName: room.name || room.type,
@@ -270,11 +268,12 @@ Wenn Coach-Wissen verfügbar ist, zitiere die Quelle kurz. Halte die Antwort unt
 export async function analyzeLayout(
   rooms: Room[],
   staff: Staff[],
-  operatingHours: number = 8
+  operatingHours: number = 8,
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER
 ): Promise<LayoutAnalysis> {
-  const efficiencyScore = calculateLayoutEfficiencyScore(rooms);
+  const efficiencyScore = calculateLayoutEfficiencyScore(rooms, scalePxPerMeter);
   
-  const roomAnalyses = await analyzeRoomsWithKnowledge(rooms);
+  const roomAnalyses = await analyzeRoomsWithKnowledge(rooms, scalePxPerMeter);
   const avgRoomScore = roomAnalyses.length > 0
     ? roomAnalyses.reduce((sum, r) => sum + r.sizeScore, 0) / roomAnalyses.length
     : 50;
@@ -283,11 +282,11 @@ export async function analyzeLayout(
   
   const capacityAnalysis = analyzeCapacity(rooms, staff, operatingHours);
 
-  const hasReception = rooms.some(r => r.type === "reception");
-  const hasWaiting = rooms.some(r => r.type === "waiting");
-  const examRoomCount = rooms.filter(r => r.type === "exam").length;
-  const hasLab = rooms.some(r => r.type === "lab");
-  const hasOffice = rooms.some(r => r.type === "office");
+  const hasReception = rooms.some(r => normalizeRoomType(r.type) === "reception");
+  const hasWaiting = rooms.some(r => normalizeRoomType(r.type) === "waiting");
+  const examRoomCount = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
+  const hasLab = rooms.some(r => normalizeRoomType(r.type) === "lab");
+  const hasOffice = rooms.some(r => normalizeRoomType(r.type) === "office");
 
   const knowledgeRecommendations = await getKnowledgePoweredRecommendations(
     hasReception,
@@ -352,11 +351,13 @@ export async function analyzeLayout(
 export async function getQuickRecommendation(
   rooms: Room[],
   staff: Staff[],
-  question?: string
+  question?: string,
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER
 ): Promise<string> {
   const roomsByType = new Map<string, number>();
   rooms.forEach(room => {
-    roomsByType.set(room.type, (roomsByType.get(room.type) || 0) + 1);
+    const normalizedType = normalizeRoomType(room.type);
+    roomsByType.set(normalizedType, (roomsByType.get(normalizedType) || 0) + 1);
   });
 
   const staffByRole = new Map<string, number>();
@@ -372,7 +373,7 @@ export async function getQuickRecommendation(
     .map(([role, count]) => `${count} ${role}(s)`)
     .join(", ");
 
-  const totalArea = rooms.reduce((sum, room) => sum + pixelsToSqM(room.width * room.height), 0);
+  const totalArea = rooms.reduce((sum, room) => sum + pixelsToSqM(room.width, room.height, scalePxPerMeter), 0);
 
   const searchQuery = question || `Zahnarztpraxis Optimierung ${roomsSummary} ${staffSummary}`;
   let coachKnowledge = "";

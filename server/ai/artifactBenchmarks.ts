@@ -71,11 +71,12 @@ async function refreshCacheIfNeeded() {
 
     cachedRoomSizes = {};
     for (const [type, data] of Object.entries(roomSizes)) {
-      cachedRoomSizes[type] = {
+      const normalizedType = normalizeRoomType(type);
+      cachedRoomSizes[normalizedType] = {
         minSqM: data.min,
         maxSqM: data.max,
         optimalSqM: data.optimal,
-        source: data.citations.length > 0 ? formatCitations(data.citations).join(", ") : (ROOM_SIZE_STANDARDS[type]?.source || "Safe Default"),
+        source: data.citations.length > 0 ? formatCitations(data.citations).join(", ") : (ROOM_SIZE_STANDARDS[normalizedType]?.source || "Safe Default"),
         citations: data.citations,
         fromKnowledge: data.citations.length > 0
       };
@@ -309,7 +310,14 @@ export async function getKnowledgePoweredRecommendations(
   return recommendations;
 }
 
-export async function evaluateRoomSizeWithKnowledge(type: string, widthPx: number, heightPx: number): Promise<{
+import { DEFAULT_LAYOUT_SCALE_PX_PER_METER, normalizeRoomType } from "@shared/roomTypes";
+
+export async function evaluateRoomSizeWithKnowledge(
+  type: string,
+  widthPx: number,
+  heightPx: number,
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER
+): Promise<{
   score: number;
   assessment: "undersized" | "optimal" | "oversized";
   actualSqM: number;
@@ -318,7 +326,8 @@ export async function evaluateRoomSizeWithKnowledge(type: string, widthPx: numbe
   fromKnowledge: boolean;
 }> {
   const roomSizes = await getKnowledgePoweredRoomSizes();
-  const standard = roomSizes[type];
+  const normalizedType = normalizeRoomType(type);
+  const standard = roomSizes[normalizedType];
   
   if (!standard) {
     return {
@@ -331,8 +340,7 @@ export async function evaluateRoomSizeWithKnowledge(type: string, widthPx: numbe
     };
   }
 
-  const areaPx = widthPx * heightPx;
-  const actualSqM = pixelsToSqM(areaPx);
+  const actualSqM = pixelsToSqM(widthPx, heightPx, scalePxPerMeter);
 
   let score: number;
   let assessment: "undersized" | "optimal" | "oversized";
