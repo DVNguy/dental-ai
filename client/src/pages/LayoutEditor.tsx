@@ -877,15 +877,12 @@ export default function LayoutEditor() {
         <AnimatePresence>
           {selectedRoom && (
             <motion.div
-              drag
-              dragMomentum={false}
-              dragElastic={0.1}
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="absolute top-8 left-1/2 -translate-x-1/2 w-80 bg-background/90 backdrop-blur-md shadow-2xl rounded-2xl border border-border/50 z-50 overflow-hidden"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="absolute top-4 right-4 w-80 bg-background/95 backdrop-blur-md shadow-2xl rounded-2xl border border-border/50 z-50 overflow-hidden"
             >
-              <div className="h-8 bg-muted/40 w-full cursor-grab active:cursor-grabbing flex items-center justify-center border-b">
+              <div className="h-8 bg-muted/40 w-full flex items-center justify-center border-b">
                   <div className="w-12 h-1 rounded-full bg-foreground/10" />
               </div>
 
