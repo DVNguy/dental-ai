@@ -1,4 +1,4 @@
-import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk } from "@shared/schema";
+import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType } from "@shared/schema";
 
 const API_BASE = "";
 
@@ -107,6 +107,30 @@ export const api = {
     search: (query: string, limit?: number) => fetchAPI<Array<KnowledgeChunk & { source: KnowledgeSource; similarity: number }>>("/api/knowledge/search", {
       method: "POST",
       body: JSON.stringify({ query, limit }),
+    }),
+  },
+
+  workflows: {
+    list: (practiceId: string) => fetchAPI<Workflow[]>(`/api/practices/${practiceId}/workflows`),
+    create: (practiceId: string, data: { name: string; actorType: WorkflowActorType }) =>
+      fetchAPI<Workflow>(`/api/practices/${practiceId}/workflows`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => fetchAPI<void>(`/api/workflows/${id}`, {
+      method: "DELETE",
+    }),
+  },
+
+  connections: {
+    list: (workflowId: string) => fetchAPI<WorkflowConnection[]>(`/api/workflows/${workflowId}/connections`),
+    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; label?: string; weight?: number }) =>
+      fetchAPI<WorkflowConnection>(`/api/workflows/${workflowId}/connections`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => fetchAPI<void>(`/api/workflow-connections/${id}`, {
+      method: "DELETE",
     }),
   },
 };

@@ -13,13 +13,19 @@ import {
   type InsertKnowledgeSource,
   type KnowledgeChunk,
   type InsertKnowledgeChunk,
+  type Workflow,
+  type InsertWorkflow,
+  type WorkflowConnection,
+  type InsertWorkflowConnection,
   users,
   practices,
   rooms,
   staff,
   simulations,
   knowledgeSources,
-  knowledgeChunks
+  knowledgeChunks,
+  workflows,
+  workflowConnections
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, desc } from "drizzle-orm";
@@ -55,6 +61,14 @@ export interface IStorage {
   getChunksBySourceId(sourceId: string): Promise<KnowledgeChunk[]>;
   createKnowledgeChunk(chunk: InsertKnowledgeChunk): Promise<KnowledgeChunk>;
   searchKnowledgeChunks(queryEmbedding: number[], limit?: number): Promise<(KnowledgeChunk & { source: KnowledgeSource; similarity: number })[]>;
+
+  getWorkflowsByPracticeId(practiceId: string): Promise<Workflow[]>;
+  createWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
+  deleteWorkflow(id: string): Promise<void>;
+  
+  getConnectionsByWorkflowId(workflowId: string): Promise<WorkflowConnection[]>;
+  createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection>;
+  deleteConnection(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -221,6 +235,32 @@ export class DatabaseStorage implements IStorage {
       },
       similarity: parseFloat(row.similarity)
     }));
+  }
+
+  async getWorkflowsByPracticeId(practiceId: string): Promise<Workflow[]> {
+    return await db.select().from(workflows).where(eq(workflows.practiceId, practiceId));
+  }
+
+  async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+    const result = await db.insert(workflows).values(workflow).returning();
+    return result[0];
+  }
+
+  async deleteWorkflow(id: string): Promise<void> {
+    await db.delete(workflows).where(eq(workflows.id, id));
+  }
+
+  async getConnectionsByWorkflowId(workflowId: string): Promise<WorkflowConnection[]> {
+    return await db.select().from(workflowConnections).where(eq(workflowConnections.workflowId, workflowId));
+  }
+
+  async createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection> {
+    const result = await db.insert(workflowConnections).values(connection).returning();
+    return result[0];
+  }
+
+  async deleteConnection(id: string): Promise<void> {
+    await db.delete(workflowConnections).where(eq(workflowConnections.id, id));
   }
 }
 

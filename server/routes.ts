@@ -6,6 +6,8 @@ import {
   insertRoomSchema,
   insertStaffSchema,
   insertSimulationSchema,
+  insertWorkflowSchema,
+  insertWorkflowConnectionSchema,
 } from "@shared/schema";
 import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
 import { computeLayoutEfficiency } from "./ai/layoutEfficiency";
@@ -552,6 +554,70 @@ export async function registerRoutes(
     }
   });
   // ---------------------------------------------------------
+
+  // Workflow endpoints
+  app.get("/api/practices/:id/workflows", async (req, res) => {
+    try {
+      const workflows = await storage.getWorkflowsByPracticeId(req.params.id);
+      res.json(workflows);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch workflows" });
+    }
+  });
+
+  app.post("/api/practices/:id/workflows", async (req, res) => {
+    try {
+      const validated = insertWorkflowSchema.parse({
+        ...req.body,
+        practiceId: req.params.id,
+      });
+      const workflow = await storage.createWorkflow(validated);
+      res.json(workflow);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid workflow data" });
+    }
+  });
+
+  app.delete("/api/workflows/:id", async (req, res) => {
+    try {
+      await storage.deleteWorkflow(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete workflow" });
+    }
+  });
+
+  // Workflow connection endpoints
+  app.get("/api/workflows/:id/connections", async (req, res) => {
+    try {
+      const connections = await storage.getConnectionsByWorkflowId(req.params.id);
+      res.json(connections);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch connections" });
+    }
+  });
+
+  app.post("/api/workflows/:id/connections", async (req, res) => {
+    try {
+      const validated = insertWorkflowConnectionSchema.parse({
+        ...req.body,
+        workflowId: req.params.id,
+      });
+      const connection = await storage.createConnection(validated);
+      res.json(connection);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid connection data" });
+    }
+  });
+
+  app.delete("/api/workflow-connections/:id", async (req, res) => {
+    try {
+      await storage.deleteConnection(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete connection" });
+    }
+  });
 
   return httpServer;
 }

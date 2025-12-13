@@ -88,6 +88,27 @@ export const knowledgeArtifacts = pgTable("knowledge_artifacts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const WORKFLOW_ACTOR_TYPES = ["patient", "staff", "instruments"] as const;
+export type WorkflowActorType = typeof WORKFLOW_ACTOR_TYPES[number];
+
+export const workflows = pgTable("workflows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  actorType: text("actor_type").notNull().$type<WorkflowActorType>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const workflowConnections = pgTable("workflow_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workflowId: varchar("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  fromRoomId: varchar("from_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+  toRoomId: varchar("to_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+  label: text("label"),
+  weight: integer("weight").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -124,6 +145,16 @@ export const insertKnowledgeArtifactSchema = createInsertSchema(knowledgeArtifac
   createdAt: true,
 });
 
+export const insertWorkflowSchema = createInsertSchema(workflows).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWorkflowConnectionSchema = createInsertSchema(workflowConnections).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -147,3 +178,9 @@ export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
 
 export type InsertKnowledgeArtifact = z.infer<typeof insertKnowledgeArtifactSchema>;
 export type KnowledgeArtifact = typeof knowledgeArtifacts.$inferSelect;
+
+export type InsertWorkflow = z.infer<typeof insertWorkflowSchema>;
+export type Workflow = typeof workflows.$inferSelect;
+
+export type InsertWorkflowConnection = z.infer<typeof insertWorkflowConnectionSchema>;
+export type WorkflowConnection = typeof workflowConnections.$inferSelect;
