@@ -72,11 +72,15 @@ async function refreshCacheIfNeeded() {
     cachedRoomSizes = {};
     for (const [type, data] of Object.entries(roomSizes)) {
       const normalizedType = normalizeRoomType(type);
+      // Use clean source name instead of full KB document paths
+      const cleanSource = data.citations.length > 0 
+        ? "Praxis-Standards" 
+        : (ROOM_SIZE_STANDARDS[normalizedType]?.source || "deutschen Standards");
       cachedRoomSizes[normalizedType] = {
         minSqM: data.min,
         maxSqM: data.max,
         optimalSqM: data.optimal,
-        source: data.citations.length > 0 ? formatCitations(data.citations).join(", ") : (ROOM_SIZE_STANDARDS[normalizedType]?.source || "Safe Default"),
+        source: cleanSource,
         citations: data.citations,
         fromKnowledge: data.citations.length > 0
       };
@@ -87,7 +91,7 @@ async function refreshCacheIfNeeded() {
         min: staffing.mfaPerDoctor.min,
         max: staffing.mfaPerDoctor.max,
         optimal: staffing.mfaPerDoctor.optimal,
-        source: staffing.mfaPerDoctor.citations.length > 0 ? formatCitations(staffing.mfaPerDoctor.citations).join(", ") : "KZBV Praxis-Benchmarks",
+        source: staffing.mfaPerDoctor.citations.length > 0 ? "Praxis-Standards" : "KZBV Praxis-Benchmarks",
         citations: staffing.mfaPerDoctor.citations,
         fromKnowledge: staffing.mfaPerDoctor.citations.length > 0
       },
@@ -95,7 +99,7 @@ async function refreshCacheIfNeeded() {
         min: staffing.supportPerPhysician.min,
         max: staffing.supportPerPhysician.max,
         optimal: staffing.supportPerPhysician.optimal,
-        source: staffing.supportPerPhysician.citations.length > 0 ? formatCitations(staffing.supportPerPhysician.citations).join(", ") : "KV Praxisorganisation",
+        source: staffing.supportPerPhysician.citations.length > 0 ? "Praxis-Standards" : "KV Praxisorganisation",
         citations: staffing.supportPerPhysician.citations,
         fromKnowledge: staffing.supportPerPhysician.citations.length > 0
       }
