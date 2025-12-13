@@ -1,0 +1,64 @@
+BUILD: Implement optimistic updates + debounced commits + snap-to-grid + boundaries in LayoutEditor.
+
+Scope: Only client/src/pages/LayoutEditor.tsx (plus tiny helper inside same file if needed). No backend changes.
+
+1) Optimistic updates (react-query)
+- updateRoomMutation:
+  - onMutate:
+    - cancelQueries(["rooms", practiceId])
+    - snapshot previous rooms
+    - update cache immediately: replace the room with merged updates (x/y/width/height/name)
+  - onError: rollback snapshot
+  - onSuccess: update cache with server response (do NOT hard invalidate rooms)
+  - onSettled: optionally invalidate(["rooms", practiceId]) only if needed (prefer not)
+
+- deleteRoomMutation:
+  - onMutate: remove room from cache immediately
+  - onError rollback
+  - onSuccess: keep cache as is
+  - remove selectedRoomId if deleted
+
+- createRoomMutation:
+  - keep current behavior (invalidate rooms + select newRoom.id) OR do a simple optimistic temp room if easy.
+  - Do not overcomplicate.
+
+2) Stop request storms (name + sliders)
+- Room name input:
+  - do NOT call updateRoom on every key.
+  - Use local state `roomNameDraft` synced when selectedRoom changes.
+  - Commit to API onBlur AND also with debounce 400–600ms after last keystroke.
+
+- Width/Height sliders:
+  - Keep UI preview instant (local/cache update).
+  - Send API update debounced (300–500ms) OR on pointer release.
+  - If Slider has no onValueCommit, implement a debounced commit with setTimeout/useRef.
+
+3) Debounce AI analysis invalidation
+- Currently you invalidate ["ai-analysis", practiceId] on every update.
+- Replace with a debounced invalidation (e.g. 1500–2500ms idle after last commit).
+- Trigger it after successful commits (drag end commit, slider commit, name commit), not every preview tick.
+
+4) Snap-to-grid + boundary clamp on drag end
+- GRID_SIZE = 40 (matches background).
+- Add a ref to the canvas container div (the big flex-1 area).
+- On drag end compute:
+  rawX = room.x + info.offset.x
+  rawY = room.y + info.offset.y
+- If Shift is pressed: no snap. Else:
+  snapX = round(rawX/GRID_SIZE)*GRID_SIZE
+  snapY = round(rawY/GRID_SIZE)*GRID_SIZE
+- Clamp:
+  maxX = canvasWidth - room.width
+  maxY = canvasHeight - room.height
+  finalX = clamp(snapX, 0, maxX)
+  finalY = clamp(snapY, 0, maxY)
+- Persist finalX/finalY via updateRoomMutation.
+
+5) Output
+- List changed files (should be 1).
+- Short manual test plan:
+  - drag room: no snap-back
+  - resize slider: no network spam
+  - type name: saves after pause/blur
+  - drag to edges: room stays inside
+  - wait 2s: ai-analysis refresh happens once
