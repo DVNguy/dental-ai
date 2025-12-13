@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,71 @@ import { api } from "@/lib/api";
 import type { Room, Workflow, WorkflowConnection } from "@shared/schema";
 import type { LayoutEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
+
+function computeBezierPath(fromRoom: Room, toRoom: Room): { path: string; startX: number; startY: number; endX: number; endY: number } {
+  const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
+  const fromCenterY = mToPx(fromRoom.y + fromRoom.height / 2);
+  const toCenterX = mToPx(toRoom.x + toRoom.width / 2);
+  const toCenterY = mToPx(toRoom.y + toRoom.height / 2);
+  
+  const dx = toCenterX - fromCenterX;
+  const dy = toCenterY - fromCenterY;
+  
+  let startX: number, startY: number, endX: number, endY: number;
+  let c1x: number, c1y: number, c2x: number, c2y: number;
+  
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    startX = mToPx(fromRoom.x + (dx > 0 ? fromRoom.width : 0));
+    startY = mToPx(fromRoom.y + fromRoom.height / 2);
+    endX = mToPx(toRoom.x + (dx > 0 ? 0 : toRoom.width));
+    endY = mToPx(toRoom.y + toRoom.height / 2);
+    c1x = startX + (endX - startX) * 0.5;
+    c1y = startY;
+    c2x = endX - (endX - startX) * 0.5;
+    c2y = endY;
+  } else {
+    startX = mToPx(fromRoom.x + fromRoom.width / 2);
+    startY = mToPx(fromRoom.y + (dy > 0 ? fromRoom.height : 0));
+    endX = mToPx(toRoom.x + toRoom.width / 2);
+    endY = mToPx(toRoom.y + (dy > 0 ? 0 : toRoom.height));
+    c1x = startX;
+    c1y = startY + (endY - startY) * 0.5;
+    c2x = endX;
+    c2y = endY - (endY - startY) * 0.5;
+  }
+  
+  const path = `M ${startX} ${startY} C ${c1x} ${c1y} ${c2x} ${c2y} ${endX} ${endY}`;
+  return { path, startX, startY, endX, endY };
+}
+
+function computePreviewPath(fromRoom: Room, mouseX: number, mouseY: number): string {
+  const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
+  const fromCenterY = mToPx(fromRoom.y + fromRoom.height / 2);
+  
+  const dx = mouseX - fromCenterX;
+  const dy = mouseY - fromCenterY;
+  
+  let startX: number, startY: number;
+  let c1x: number, c1y: number, c2x: number, c2y: number;
+  
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    startX = mToPx(fromRoom.x + (dx > 0 ? fromRoom.width : 0));
+    startY = mToPx(fromRoom.y + fromRoom.height / 2);
+    c1x = startX + dx * 0.5;
+    c1y = startY;
+    c2x = mouseX - dx * 0.5;
+    c2y = mouseY;
+  } else {
+    startX = mToPx(fromRoom.x + fromRoom.width / 2);
+    startY = mToPx(fromRoom.y + (dy > 0 ? fromRoom.height : 0));
+    c1x = startX;
+    c1y = startY + dy * 0.5;
+    c2x = mouseX;
+    c2y = mouseY - dy * 0.5;
+  }
+  
+  return `M ${startX} ${startY} C ${c1x} ${c1y} ${c2x} ${c2y} ${mouseX} ${mouseY}`;
+}
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
@@ -29,6 +95,8 @@ export default function LayoutEditor() {
   
   const [connectMode, setConnectMode] = useState(false);
   const [pendingFromRoomId, setPendingFromRoomId] = useState<string | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const aiInvalidateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -241,6 +309,26 @@ export default function LayoutEditor() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && connectMode) {
+        setPendingFromRoomId(null);
+        if (!pendingFromRoomId) {
+          setConnectMode(false);
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [connectMode, pendingFromRoomId]);
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!connectMode || !pendingFromRoomId || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, [connectMode, pendingFromRoomId]);
+
   const handleNameChange = (value: string) => {
     const targetRoomId = selectedRoomId;
     if (!targetRoomId) return;
@@ -390,23 +478,33 @@ export default function LayoutEditor() {
       .map(conn => {
         const fromRoom = roomMap.get(conn.fromRoomId)!;
         const toRoom = roomMap.get(conn.toRoomId)!;
-        
-        const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
-        const fromCenterY = mToPx(fromRoom.y + fromRoom.height / 2);
-        const toCenterX = mToPx(toRoom.x + toRoom.width / 2);
-        const toCenterY = mToPx(toRoom.y + toRoom.height / 2);
+        const { path, startX, startY, endX, endY } = computeBezierPath(fromRoom, toRoom);
         
         return {
           id: conn.id,
-          x1: fromCenterX,
-          y1: fromCenterY,
-          x2: toCenterX,
-          y2: toCenterY,
+          path,
+          midX: (startX + endX) / 2,
+          midY: (startY + endY) / 2,
           fromRoomId: conn.fromRoomId,
           toRoomId: conn.toRoomId,
         };
       });
   }, [connections, rooms, currentFloor]);
+
+  const previewPath = useMemo(() => {
+    if (!connectMode || !pendingFromRoomId || !mousePos) return null;
+    const fromRoom = rooms.find(r => r.id === pendingFromRoomId);
+    if (!fromRoom) return null;
+    
+    if (hoverRoomId && hoverRoomId !== pendingFromRoomId) {
+      const toRoom = rooms.find(r => r.id === hoverRoomId);
+      if (toRoom) {
+        return computeBezierPath(fromRoom, toRoom).path;
+      }
+    }
+    
+    return computePreviewPath(fromRoom, mousePos.x, mousePos.y);
+  }, [connectMode, pendingFromRoomId, mousePos, hoverRoomId, rooms]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -514,6 +612,8 @@ export default function LayoutEditor() {
         <div 
           ref={canvasRef}
           className="flex-1 bg-[#F0F4F8] relative overflow-hidden cursor-grab active:cursor-grabbing"
+          onMouseMove={handleCanvasMouseMove}
+          onMouseLeave={() => setMousePos(null)}
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedRoomId(null);
           }}
@@ -639,6 +739,8 @@ export default function LayoutEditor() {
                       handleRoomClickInConnectMode(room.id);
                     }
                   }}
+                  onMouseEnter={() => connectMode && setHoverRoomId(room.id)}
+                  onMouseLeave={() => connectMode && setHoverRoomId(null)}
                   className={cn(
                     "absolute rounded-lg border-2 flex flex-col items-center justify-center select-none transition-colors transition-shadow duration-200 will-change-transform group",
                     connectMode ? "cursor-pointer" : "cursor-move",
@@ -704,24 +806,32 @@ export default function LayoutEditor() {
               >
                 <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
               </marker>
+              <marker
+                id="arrowhead-preview"
+                markerWidth="10"
+                markerHeight="7"
+                refX="9"
+                refY="3.5"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e" />
+              </marker>
             </defs>
             {connectionArrows.map(arrow => (
               <g key={arrow.id} data-testid={`connection-${arrow.id}`}>
-                <line
-                  x1={arrow.x1}
-                  y1={arrow.y1}
-                  x2={arrow.x2}
-                  y2={arrow.y2}
+                <path
+                  d={arrow.path}
                   stroke="#3b82f6"
                   strokeWidth="3"
                   strokeLinecap="round"
+                  fill="none"
                   markerEnd="url(#arrowhead)"
                   className="transition-all duration-200"
                 />
                 {connectMode && (
                   <circle
-                    cx={(arrow.x1 + arrow.x2) / 2}
-                    cy={(arrow.y1 + arrow.y2) / 2}
+                    cx={arrow.midX}
+                    cy={arrow.midY}
                     r="12"
                     fill="#ef4444"
                     className="pointer-events-auto cursor-pointer hover:fill-red-600 transition-colors"
@@ -731,8 +841,8 @@ export default function LayoutEditor() {
                 )}
                 {connectMode && (
                   <text
-                    x={(arrow.x1 + arrow.x2) / 2}
-                    y={(arrow.y1 + arrow.y2) / 2 + 4}
+                    x={arrow.midX}
+                    y={arrow.midY + 4}
                     textAnchor="middle"
                     fill="white"
                     fontSize="14"
@@ -744,6 +854,19 @@ export default function LayoutEditor() {
                 )}
               </g>
             ))}
+            {previewPath && (
+              <path
+                d={previewPath}
+                stroke="#22c55e"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray="8 4"
+                fill="none"
+                markerEnd="url(#arrowhead-preview)"
+                className="animate-pulse"
+                data-testid="preview-connection"
+              />
+            )}
           </svg>
         </div>
 
