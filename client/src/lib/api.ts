@@ -124,9 +124,15 @@ export const api = {
 
   connections: {
     list: (workflowId: string) => fetchAPI<WorkflowConnection[]>(`/api/workflows/${workflowId}/connections`),
-    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; label?: string; weight?: number }) =>
+    listByPractice: (practiceId: string) => fetchAPI<WorkflowConnection[]>(`/api/practices/${practiceId}/workflow-connections`),
+    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; label?: string; weight?: number; flowType?: string; scenario?: string }) =>
       fetchAPI<WorkflowConnection>(`/api/workflows/${workflowId}/connections`, {
         method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<{ fromRoomId: string; toRoomId: string; label: string; weight: number; flowType: string; scenario: string }>) =>
+      fetchAPI<WorkflowConnection>(`/api/workflow-connections/${id}`, {
+        method: "PUT",
         body: JSON.stringify(data),
       }),
     delete: (id: string) => fetchAPI<void>(`/api/workflow-connections/${id}`, {

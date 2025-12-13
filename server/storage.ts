@@ -67,7 +67,9 @@ export interface IStorage {
   deleteWorkflow(id: string): Promise<void>;
   
   getConnectionsByWorkflowId(workflowId: string): Promise<WorkflowConnection[]>;
+  getConnectionsByPracticeId(practiceId: string): Promise<WorkflowConnection[]>;
   createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection>;
+  updateConnection(id: string, updates: Partial<Omit<InsertWorkflowConnection, 'workflowId'>>): Promise<WorkflowConnection | undefined>;
   deleteConnection(id: string): Promise<void>;
 }
 
@@ -254,8 +256,29 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(workflowConnections).where(eq(workflowConnections.workflowId, workflowId));
   }
 
+  async getConnectionsByPracticeId(practiceId: string): Promise<WorkflowConnection[]> {
+    const practiceWorkflows = await db.select().from(workflows).where(eq(workflows.practiceId, practiceId));
+    if (practiceWorkflows.length === 0) return [];
+    
+    const allConnections: WorkflowConnection[] = [];
+    for (const wf of practiceWorkflows) {
+      const conns = await db.select().from(workflowConnections).where(eq(workflowConnections.workflowId, wf.id));
+      allConnections.push(...conns);
+    }
+    return allConnections;
+  }
+
   async createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection> {
     const result = await db.insert(workflowConnections).values(connection).returning();
+    return result[0];
+  }
+
+  async updateConnection(id: string, updates: Partial<Omit<InsertWorkflowConnection, 'workflowId'>>): Promise<WorkflowConnection | undefined> {
+    const result = await db
+      .update(workflowConnections)
+      .set(updates)
+      .where(eq(workflowConnections.id, id))
+      .returning();
     return result[0];
   }
 

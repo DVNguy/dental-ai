@@ -645,12 +645,34 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/workflow-connections/:id", async (req, res) => {
+    try {
+      const connection = await storage.updateConnection(req.params.id, req.body);
+      if (!connection) {
+        return res.status(404).json({ error: "Connection not found" });
+      }
+      res.json(connection);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update connection" });
+    }
+  });
+
   app.delete("/api/workflow-connections/:id", async (req, res) => {
     try {
       await storage.deleteConnection(req.params.id);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete connection" });
+    }
+  });
+
+  // Practice-level workflow connections (alle Connections einer Praxis)
+  app.get("/api/practices/:id/workflow-connections", async (req, res) => {
+    try {
+      const connections = await storage.getConnectionsByPracticeId(req.params.id);
+      res.json(connections);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch workflow connections" });
     }
   });
 

@@ -99,6 +99,12 @@ export const workflows = pgTable("workflows", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const FLOW_TYPES = ["patient", "staff", "material", "instruments"] as const;
+export type FlowType = typeof FLOW_TYPES[number];
+
+export const SCENARIO_TYPES = ["standard", "emergency", "peak", "night"] as const;
+export type ScenarioType = typeof SCENARIO_TYPES[number];
+
 export const workflowConnections = pgTable("workflow_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   workflowId: varchar("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
@@ -106,6 +112,8 @@ export const workflowConnections = pgTable("workflow_connections", {
   toRoomId: varchar("to_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
   label: text("label"),
   weight: integer("weight").notNull().default(1),
+  flowType: text("flow_type").$type<FlowType>().default("patient"),
+  scenario: text("scenario").$type<ScenarioType>().default("standard"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
