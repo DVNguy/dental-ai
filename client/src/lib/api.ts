@@ -173,6 +173,14 @@ export interface CapacityAnalysis {
   benchmarkComparison: string;
 }
 
+export interface WorkflowMetrics {
+  totalDistanceMeters: number;
+  avgStepDistanceMeters: number;
+  backtrackingCount: number;
+  longestConnections: Array<{ fromName: string; toName: string; distanceMeters: number }>;
+  motionWasteScore: number;
+}
+
 export interface LayoutEfficiencyResult {
   score: number;
   breakdown: {
@@ -193,4 +201,5 @@ export interface LayoutEfficiencyResult {
     unit: string;
   }>;
   tips: string[];
+  workflowMetrics?: WorkflowMetrics;
 }

@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2 } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -98,6 +98,7 @@ export default function LayoutEditor() {
       api.connections.create(activeWorkflow!.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+      queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     },
   });
 
@@ -105,6 +106,7 @@ export default function LayoutEditor() {
     mutationFn: (id: string) => api.connections.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+      queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     },
   });
 
@@ -564,6 +566,41 @@ export default function LayoutEditor() {
                       <p className="text-[10px] text-muted-foreground leading-tight" data-testid={`text-tip-${i}`}>{tip}</p>
                     </div>
                   ))}
+                </div>
+              )}
+              
+              {efficiencyData.workflowMetrics && (
+                <div className="mt-2 pt-2 border-t" data-testid="section-workflow-metrics">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Footprints className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      {t("layout.workflowMetrics", "Workflow-Laufwege")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-center">
+                    <div className="bg-muted/50 rounded px-1 py-0.5">
+                      <div className="text-xs font-bold text-foreground" data-testid="text-total-distance">
+                        {efficiencyData.workflowMetrics.totalDistanceMeters}m
+                      </div>
+                      <div className="text-[8px] text-muted-foreground">Gesamt</div>
+                    </div>
+                    <div className="bg-muted/50 rounded px-1 py-0.5">
+                      <div className="text-xs font-bold text-foreground" data-testid="text-avg-step">
+                        {efficiencyData.workflowMetrics.avgStepDistanceMeters}m
+                      </div>
+                      <div className="text-[8px] text-muted-foreground">Ø/Schritt</div>
+                    </div>
+                    <div className="bg-muted/50 rounded px-1 py-0.5">
+                      <div className={cn(
+                        "text-xs font-bold",
+                        efficiencyData.workflowMetrics.motionWasteScore > 50 ? "text-red-600" : 
+                        efficiencyData.workflowMetrics.motionWasteScore > 25 ? "text-amber-600" : "text-green-600"
+                      )} data-testid="text-motion-waste">
+                        {efficiencyData.workflowMetrics.motionWasteScore}
+                      </div>
+                      <div className="text-[8px] text-muted-foreground">Verlust</div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -1,6 +1,14 @@
-import type { Room } from "@shared/schema";
+import type { Room, WorkflowConnection } from "@shared/schema";
 import { pxToM } from "@shared/units";
 import { normalizeRoomType } from "@shared/roomTypes";
+
+export interface WorkflowMetrics {
+  totalDistanceMeters: number;
+  avgStepDistanceMeters: number;
+  backtrackingCount: number;
+  longestConnections: Array<{ fromName: string; toName: string; distanceMeters: number }>;
+  motionWasteScore: number;
+}
 
 export interface LayoutFlowBreakdown {
   patientFlowMeters: number;
@@ -26,6 +34,7 @@ export interface LayoutEfficiencyResult {
   breakdown: LayoutFlowBreakdown;
   issues: LayoutIssue[];
   tips: string[];
+  workflowMetrics?: WorkflowMetrics;
 }
 
 interface RoomM {
@@ -136,6 +145,92 @@ function calculateFlowDistance(
   }
 
   return { totalMeters, crossFloorMeters };
+}
+
+export function computeWorkflowMetrics(
+  rooms: Room[],
+  connections: WorkflowConnection[]
+): WorkflowMetrics | null {
+  if (connections.length === 0) return null;
+
+  const roomsM = rooms.map(convertToMeters);
+  const roomMap = new Map(roomsM.map((r) => [r.id, r]));
+
+  const validConnections = connections.filter(
+    (c) => roomMap.has(c.fromRoomId) && roomMap.has(c.toRoomId)
+  );
+  
+  if (validConnections.length === 0) return null;
+
+  const connectionDistances: Array<{
+    fromName: string;
+    toName: string;
+    distanceMeters: number;
+    fromRoomId: string;
+    toRoomId: string;
+  }> = [];
+
+  let totalDistanceMeters = 0;
+  let backtrackingCount = 0;
+  const visitedPairs = new Set<string>();
+
+  for (const conn of validConnections) {
+    const fromRoom = roomMap.get(conn.fromRoomId)!;
+    const toRoom = roomMap.get(conn.toRoomId)!;
+
+    const distance = calculateDistance(fromRoom, toRoom);
+    totalDistanceMeters += distance;
+
+    connectionDistances.push({
+      fromName: fromRoom.name || fromRoom.type,
+      toName: toRoom.name || toRoom.type,
+      distanceMeters: Math.round(distance * 10) / 10,
+      fromRoomId: conn.fromRoomId,
+      toRoomId: conn.toRoomId,
+    });
+
+    const pairKey = [conn.fromRoomId, conn.toRoomId].sort().join("-");
+    const reversePairKey = [conn.toRoomId, conn.fromRoomId].sort().join("-");
+    if (visitedPairs.has(pairKey) || visitedPairs.has(reversePairKey)) {
+      backtrackingCount++;
+    }
+    visitedPairs.add(pairKey);
+  }
+
+  const avgStepDistanceMeters =
+    connectionDistances.length > 0
+      ? Math.round((totalDistanceMeters / connectionDistances.length) * 10) / 10
+      : 0;
+
+  const longestConnections = connectionDistances
+    .sort((a, b) => b.distanceMeters - a.distanceMeters)
+    .slice(0, 3)
+    .map(({ fromName, toName, distanceMeters }) => ({
+      fromName,
+      toName,
+      distanceMeters,
+    }));
+
+  const OPTIMAL_TOTAL_DISTANCE = 20;
+  const OPTIMAL_AVG_STEP = 4;
+
+  let motionWasteScore = 0;
+  if (totalDistanceMeters > OPTIMAL_TOTAL_DISTANCE) {
+    motionWasteScore += Math.min(50, (totalDistanceMeters - OPTIMAL_TOTAL_DISTANCE) * 2);
+  }
+  if (avgStepDistanceMeters > OPTIMAL_AVG_STEP) {
+    motionWasteScore += Math.min(30, (avgStepDistanceMeters - OPTIMAL_AVG_STEP) * 5);
+  }
+  motionWasteScore += backtrackingCount * 5;
+  motionWasteScore = Math.min(100, Math.round(motionWasteScore));
+
+  return {
+    totalDistanceMeters: Math.round(totalDistanceMeters * 10) / 10,
+    avgStepDistanceMeters,
+    backtrackingCount,
+    longestConnections,
+    motionWasteScore,
+  };
 }
 
 export function computeLayoutEfficiency(rooms: Room[]): LayoutEfficiencyResult {

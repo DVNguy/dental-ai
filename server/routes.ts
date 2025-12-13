@@ -10,7 +10,7 @@ import {
   insertWorkflowConnectionSchema,
 } from "@shared/schema";
 import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
-import { computeLayoutEfficiency } from "./ai/layoutEfficiency";
+import { computeLayoutEfficiency, computeWorkflowMetrics } from "./ai/layoutEfficiency";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
@@ -104,7 +104,42 @@ export async function registerRoutes(
       }
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const result = computeLayoutEfficiency(rooms);
-      res.json(result);
+      
+      const workflows = await storage.getWorkflowsByPracticeId(practiceId);
+      let workflowMetrics = null;
+      let workflowTips: string[] = [];
+      
+      if (workflows.length > 0) {
+        const allConnections = await Promise.all(
+          workflows.map((w) => storage.getConnectionsByWorkflowId(w.id))
+        );
+        const connections = allConnections.flat();
+        workflowMetrics = computeWorkflowMetrics(rooms, connections);
+        
+        if (workflowMetrics && workflowMetrics.longestConnections.length > 0) {
+          for (const conn of workflowMetrics.longestConnections) {
+            if (conn.distanceMeters > 5 && workflowTips.length < 3) {
+              workflowTips.push(
+                `Schritt ${conn.fromName} → ${conn.toName} ist ${conn.distanceMeters}m – Räume näher platzieren.`
+              );
+            }
+          }
+        }
+      }
+      
+      let finalScore = result.score;
+      if (workflowMetrics) {
+        const workflowWeight = 0.15;
+        const workflowScore = 100 - workflowMetrics.motionWasteScore;
+        finalScore = Math.round(result.score * (1 - workflowWeight) + workflowScore * workflowWeight);
+      }
+      
+      res.json({
+        ...result,
+        score: finalScore,
+        tips: [...result.tips, ...workflowTips].slice(0, 6),
+        workflowMetrics: workflowMetrics || undefined,
+      });
     } catch (error) {
       console.error("Layout efficiency error:", error);
       res.status(500).json({ error: "Failed to compute layout efficiency" });
