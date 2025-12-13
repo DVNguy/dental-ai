@@ -4,15 +4,15 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Room } from "@shared/schema";
+import type { Room, Workflow, WorkflowConnection } from "@shared/schema";
 import type { LayoutEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 
@@ -26,6 +26,9 @@ export default function LayoutEditor() {
   const [roomNameDraft, setRoomNameDraft] = useState("");
   const [widthDraft, setWidthDraft] = useState<number>(2);
   const [heightDraft, setHeightDraft] = useState<number>(2);
+  
+  const [connectMode, setConnectMode] = useState(false);
+  const [pendingFromRoomId, setPendingFromRoomId] = useState<string | null>(null);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const aiInvalidateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -67,6 +70,49 @@ export default function LayoutEditor() {
     staleTime: 2000,
     refetchOnWindowFocus: false,
   });
+
+  const { data: workflows = [] } = useQuery({
+    queryKey: ["workflows", practiceId],
+    queryFn: () => api.workflows.list(practiceId!),
+    enabled: !!practiceId,
+  });
+
+  const activeWorkflow = workflows[0];
+
+  const { data: connections = [] } = useQuery({
+    queryKey: ["connections", activeWorkflow?.id],
+    queryFn: () => api.connections.list(activeWorkflow!.id),
+    enabled: !!activeWorkflow,
+  });
+
+  const createWorkflowMutation = useMutation({
+    mutationFn: (data: { name: string; actorType: "patient" | "staff" | "instruments" }) =>
+      api.workflows.create(practiceId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflows", practiceId] });
+    },
+  });
+
+  const createConnectionMutation = useMutation({
+    mutationFn: (data: { fromRoomId: string; toRoomId: string }) =>
+      api.connections.create(activeWorkflow!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+    },
+  });
+
+  const deleteConnectionMutation = useMutation({
+    mutationFn: (id: string) => api.connections.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+    },
+  });
+
+  useEffect(() => {
+    if (practiceId && workflows.length === 0 && !createWorkflowMutation.isPending) {
+      createWorkflowMutation.mutate({ name: "Neupatient (Patient Flow)", actorType: "patient" });
+    }
+  }, [practiceId, workflows.length]);
 
   const getCanvasBoundsM = useCallback(() => {
     if (canvasRef.current) {
@@ -314,6 +360,52 @@ export default function LayoutEditor() {
     updateRoom(room.id, { x: newX, y: newY });
   };
 
+  const handleRoomClickInConnectMode = (roomId: string) => {
+    if (!connectMode || !activeWorkflow) return;
+    
+    if (!pendingFromRoomId) {
+      setPendingFromRoomId(roomId);
+    } else if (pendingFromRoomId !== roomId) {
+      createConnectionMutation.mutate({ fromRoomId: pendingFromRoomId, toRoomId: roomId });
+      setPendingFromRoomId(null);
+    }
+  };
+
+  const toggleConnectMode = () => {
+    setConnectMode(prev => !prev);
+    setPendingFromRoomId(null);
+    if (connectMode) {
+      setSelectedRoomId(null);
+    }
+  };
+
+  const connectionArrows = useMemo(() => {
+    const floorRooms = rooms.filter(r => r.floor === currentFloor);
+    const roomMap = new Map(floorRooms.map(r => [r.id, r]));
+    
+    return connections
+      .filter(conn => roomMap.has(conn.fromRoomId) && roomMap.has(conn.toRoomId))
+      .map(conn => {
+        const fromRoom = roomMap.get(conn.fromRoomId)!;
+        const toRoom = roomMap.get(conn.toRoomId)!;
+        
+        const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
+        const fromCenterY = mToPx(fromRoom.y + fromRoom.height / 2);
+        const toCenterX = mToPx(toRoom.x + toRoom.width / 2);
+        const toCenterY = mToPx(toRoom.y + toRoom.height / 2);
+        
+        return {
+          id: conn.id,
+          x1: fromCenterX,
+          y1: fromCenterY,
+          x2: toCenterX,
+          y2: toCenterY,
+          fromRoomId: conn.fromRoomId,
+          toRoomId: conn.toRoomId,
+        };
+      });
+  }, [connections, rooms, currentFloor]);
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       <header className="h-16 border-b flex items-center justify-between px-8 bg-card z-10 shrink-0 shadow-sm">
@@ -323,6 +415,19 @@ export default function LayoutEditor() {
         </div>
         
         <div className="flex items-center gap-4">
+          <Button
+            variant={connectMode ? "default" : "outline"}
+            size="sm"
+            onClick={toggleConnectMode}
+            className={cn(
+              "h-8 px-3",
+              connectMode && "bg-primary text-primary-foreground"
+            )}
+            data-testid="button-connect-mode"
+          >
+            <Link2 className="mr-1.5 h-4 w-4" />
+            {t("editor.connectMode", "Verbinden")}
+          </Button>
           <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
             <Button
               variant={currentFloor === -1 ? "default" : "ghost"}
@@ -469,10 +574,12 @@ export default function LayoutEditor() {
               const typeDef = ROOM_TYPES.find(t => t.id === room.type);
               const isSelected = selectedRoomId === room.id;
               
+              const isPendingFrom = pendingFromRoomId === room.id;
+              
               return (
                 <motion.div
                   key={room.id}
-                  drag
+                  drag={!connectMode}
                   dragMomentum={false}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ 
@@ -485,28 +592,40 @@ export default function LayoutEditor() {
                     zIndex: isSelected ? 50 : 1
                   }}
                   onDragEnd={(e, info) => {
+                    if (connectMode) return;
                     const shiftPressed = (e as MouseEvent).shiftKey;
                     handleDragEnd(room, info, shiftPressed);
                   }}
+                  onClick={(e) => {
+                    if (connectMode) {
+                      e.stopPropagation();
+                      handleRoomClickInConnectMode(room.id);
+                    }
+                  }}
                   className={cn(
-                    "absolute rounded-lg border-2 flex flex-col items-center justify-center cursor-move select-none transition-colors transition-shadow duration-200 will-change-transform group",
+                    "absolute rounded-lg border-2 flex flex-col items-center justify-center select-none transition-colors transition-shadow duration-200 will-change-transform group",
+                    connectMode ? "cursor-pointer" : "cursor-move",
                     typeDef?.color,
-                    isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50" : "hover:shadow-lg hover:border-primary/50"
+                    isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50" : "hover:shadow-lg hover:border-primary/50",
+                    connectMode && isPendingFrom && "ring-4 ring-green-400 border-green-500",
+                    connectMode && !isPendingFrom && pendingFromRoomId && "ring-2 ring-blue-300 border-blue-400"
                   )}
                   data-testid={`room-${room.id}`}
                 >
                   <div className="absolute inset-2 border border-black/5 rounded-sm pointer-events-none" />
                   
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedRoomId(room.id);
-                    }}
-                    className="absolute top-1 right-1 p-1.5 rounded-md bg-white/80 hover:bg-white shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20"
-                    data-testid={`button-edit-room-${room.id}`}
-                  >
-                    <Pencil className="w-3 h-3 text-slate-600" />
-                  </button>
+                  {!connectMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRoomId(room.id);
+                      }}
+                      className="absolute top-1 right-1 p-1.5 rounded-md bg-white/80 hover:bg-white shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-20"
+                      data-testid={`button-edit-room-${room.id}`}
+                    >
+                      <Pencil className="w-3 h-3 text-slate-600" />
+                    </button>
+                  )}
                   
                   <div className="text-center pointer-events-none p-2 w-full overflow-hidden relative z-10">
                     <div className="font-bold text-xs text-slate-800 truncate px-1">
@@ -517,16 +636,78 @@ export default function LayoutEditor() {
                         {typeDef?.label}
                       </div>
                     )}
-                    {isSelected && (
+                    {isSelected && !connectMode && (
                        <div className="text-[9px] text-slate-500 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">
                          {room.width.toFixed(1)} x {room.height.toFixed(1)} m
                        </div>
+                    )}
+                    {connectMode && isPendingFrom && (
+                      <div className="text-[9px] text-green-700 font-bold mt-1 bg-green-100 inline-block px-1.5 rounded">
+                        {t("editor.connectFrom", "Start →")}
+                      </div>
                     )}
                   </div>
                 </motion.div>
               );
             })}
           </AnimatePresence>
+          
+          <svg 
+            className="absolute inset-0 w-full h-full pointer-events-none z-30"
+            data-testid="svg-connections"
+          >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="7"
+                refX="9"
+                refY="3.5"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+              </marker>
+            </defs>
+            {connectionArrows.map(arrow => (
+              <g key={arrow.id} data-testid={`connection-${arrow.id}`}>
+                <line
+                  x1={arrow.x1}
+                  y1={arrow.y1}
+                  x2={arrow.x2}
+                  y2={arrow.y2}
+                  stroke="#3b82f6"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  markerEnd="url(#arrowhead)"
+                  className="transition-all duration-200"
+                />
+                {connectMode && (
+                  <circle
+                    cx={(arrow.x1 + arrow.x2) / 2}
+                    cy={(arrow.y1 + arrow.y2) / 2}
+                    r="12"
+                    fill="#ef4444"
+                    className="pointer-events-auto cursor-pointer hover:fill-red-600 transition-colors"
+                    onClick={() => deleteConnectionMutation.mutate(arrow.id)}
+                    data-testid={`button-delete-connection-${arrow.id}`}
+                  />
+                )}
+                {connectMode && (
+                  <text
+                    x={(arrow.x1 + arrow.x2) / 2}
+                    y={(arrow.y1 + arrow.y2) / 2 + 4}
+                    textAnchor="middle"
+                    fill="white"
+                    fontSize="14"
+                    fontWeight="bold"
+                    className="pointer-events-none select-none"
+                  >
+                    ×
+                  </text>
+                )}
+              </g>
+            ))}
+          </svg>
         </div>
 
         <AnimatePresence>
