@@ -410,10 +410,10 @@ export default function LayoutEditor() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      <header className="h-16 border-b flex items-center justify-between px-8 bg-card z-10 shrink-0 shadow-sm">
+      <header className="min-h-[4.5rem] py-3 border-b flex items-center justify-between px-8 bg-card z-10 shrink-0 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-primary">{t("layout.title")}</h2>
-          <p className="text-sm text-muted-foreground">{t("layout.subtitle")}</p>
+          <h2 className="text-lg font-bold tracking-tight text-primary">{t("layout.title")}</h2>
+          <p className="text-xs text-muted-foreground">{t("layout.subtitle")}</p>
         </div>
         
         <div className="flex items-center gap-4">
@@ -493,9 +493,9 @@ export default function LayoutEditor() {
                 <div className={cn("w-6 h-6 rounded flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", room.color)}>
                   <Plus className="w-3 h-3 opacity-40 group-hover:opacity-80 mix-blend-multiply" />
                 </div>
-                <div className="flex-1 min-w-0 flex items-center justify-between">
-                  <span className="text-xs font-medium truncate text-foreground/80">{room.label}</span>
-                  <span className="text-[9px] text-muted-foreground ml-1">{room.w}×{room.h}</span>
+                <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-medium text-foreground/80 leading-tight">{room.label}</span>
+                  <span className="text-[9px] text-muted-foreground shrink-0">{room.w}×{room.h}</span>
                 </div>
               </button>
             ))}
