@@ -12,11 +12,7 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Room } from "@shared/schema";
-
-const GRID_SIZE = 40;
-
-const snapToGrid = (val: number) => Math.round(val / GRID_SIZE) * GRID_SIZE;
-const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters } from "@shared/units";
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
@@ -25,8 +21,8 @@ export default function LayoutEditor() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   
   const [roomNameDraft, setRoomNameDraft] = useState("");
-  const [widthDraft, setWidthDraft] = useState<number>(100);
-  const [heightDraft, setHeightDraft] = useState<number>(100);
+  const [widthDraft, setWidthDraft] = useState<number>(2);
+  const [heightDraft, setHeightDraft] = useState<number>(2);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const aiInvalidateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -36,25 +32,32 @@ export default function LayoutEditor() {
   const pendingRoomIdRef = useRef<string | null>(null);
   
   const ROOM_TYPES = [
-    { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 150, h: 100 },
-    { id: "waiting", label: t("rooms.waiting"), color: "bg-green-100 border-green-300", w: 200, h: 150 },
-    { id: "exam", label: t("rooms.exam"), color: "bg-white border-gray-300", w: 120, h: 120 },
-    { id: "lab", label: t("rooms.lab"), color: "bg-purple-100 border-purple-300", w: 100, h: 100 },
-    { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 120, h: 120 },
+    { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 3, h: 2 },
+    { id: "waiting", label: t("rooms.waiting"), color: "bg-green-100 border-green-300", w: 4, h: 3 },
+    { id: "exam", label: t("rooms.exam"), color: "bg-white border-gray-300", w: 2.4, h: 2.4 },
+    { id: "lab", label: t("rooms.lab"), color: "bg-purple-100 border-purple-300", w: 2, h: 2 },
+    { id: "office", label: t("rooms.office"), color: "bg-orange-100 border-orange-300", w: 2.4, h: 2.4 },
   ];
 
   const { data: rooms = [] } = useQuery({
     queryKey: ["rooms", practiceId],
     queryFn: () => api.rooms.list(practiceId!),
     enabled: !!practiceId,
+    select: (data) => data.map((room) => ({
+      ...room,
+      x: normalizeToMeters(room.x),
+      y: normalizeToMeters(room.y),
+      width: normalizeToMeters(room.width),
+      height: normalizeToMeters(room.height),
+    })),
   });
 
-  const getCanvasBounds = useCallback(() => {
+  const getCanvasBoundsM = useCallback(() => {
     if (canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
+      return { width: pxToM(rect.width), height: pxToM(rect.height) };
     }
-    return { width: 1200, height: 800 };
+    return { width: pxToM(1200), height: pxToM(800) };
   }, []);
 
   const scheduleAIInvalidation = useCallback(() => {
@@ -181,18 +184,18 @@ export default function LayoutEditor() {
     }
   };
 
-  const handleWidthChange = (val: number) => {
+  const handleWidthChange = (valM: number) => {
     const targetRoomId = selectedRoomId;
     if (!targetRoomId) return;
     
-    setWidthDraft(val);
+    setWidthDraft(valM);
     clearTimeout(widthDebounceTimer.current);
     widthDebounceTimer.current = setTimeout(() => {
       const room = rooms.find(r => r.id === targetRoomId);
       if (room) {
-        const bounds = getCanvasBounds();
-        const clampedX = clamp(room.x, 0, bounds.width - val);
-        const updates: Partial<Room> = { width: val };
+        const bounds = getCanvasBoundsM();
+        const clampedX = clampM(room.x, 0, bounds.width - valM);
+        const updates: Partial<Room> = { width: valM };
         if (clampedX !== room.x) {
           updates.x = clampedX;
         }
@@ -201,18 +204,18 @@ export default function LayoutEditor() {
     }, 300);
   };
 
-  const handleHeightChange = (val: number) => {
+  const handleHeightChange = (valM: number) => {
     const targetRoomId = selectedRoomId;
     if (!targetRoomId) return;
     
-    setHeightDraft(val);
+    setHeightDraft(valM);
     clearTimeout(heightDebounceTimer.current);
     heightDebounceTimer.current = setTimeout(() => {
       const room = rooms.find(r => r.id === targetRoomId);
       if (room) {
-        const bounds = getCanvasBounds();
-        const clampedY = clamp(room.y, 0, bounds.height - val);
-        const updates: Partial<Room> = { height: val };
+        const bounds = getCanvasBoundsM();
+        const clampedY = clampM(room.y, 0, bounds.height - valM);
+        const updates: Partial<Room> = { height: valM };
         if (clampedY !== room.y) {
           updates.y = clampedY;
         }
@@ -228,8 +231,8 @@ export default function LayoutEditor() {
     createRoomMutation.mutate({ 
       type: typeId,
       name: "", 
-      x: 100, 
-      y: 100,
+      x: 2,
+      y: 2,
       width: typeDef.w,
       height: typeDef.h
     });
@@ -241,11 +244,11 @@ export default function LayoutEditor() {
 
   const handleRotate = () => {
     if (!selectedRoom) return;
-    const bounds = getCanvasBounds();
+    const bounds = getCanvasBoundsM();
     const newWidth = selectedRoom.height;
     const newHeight = selectedRoom.width;
-    const clampedX = clamp(selectedRoom.x, 0, bounds.width - newWidth);
-    const clampedY = clamp(selectedRoom.y, 0, bounds.height - newHeight);
+    const clampedX = clampM(selectedRoom.x, 0, bounds.width - newWidth);
+    const clampedY = clampM(selectedRoom.y, 0, bounds.height - newHeight);
     updateRoom(selectedRoom.id, { 
       width: newWidth, 
       height: newHeight,
@@ -265,17 +268,17 @@ export default function LayoutEditor() {
   };
 
   const handleDragEnd = (room: Room, info: { offset: { x: number; y: number } }, shiftPressed: boolean) => {
-    const bounds = getCanvasBounds();
-    let newX = room.x + info.offset.x;
-    let newY = room.y + info.offset.y;
+    const bounds = getCanvasBoundsM();
+    let newX = room.x + pxToM(info.offset.x);
+    let newY = room.y + pxToM(info.offset.y);
     
     if (!shiftPressed) {
-      newX = snapToGrid(newX);
-      newY = snapToGrid(newY);
+      newX = snapToGridM(newX);
+      newY = snapToGridM(newY);
     }
     
-    newX = clamp(newX, 0, bounds.width - room.width);
-    newY = clamp(newY, 0, bounds.height - room.height);
+    newX = clampM(newX, 0, bounds.width - room.width);
+    newY = clampM(newY, 0, bounds.height - room.height);
     
     updateRoom(room.id, { x: newX, y: newY });
   };
@@ -323,7 +326,7 @@ export default function LayoutEditor() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold leading-none truncate text-foreground/90">{room.label}</div>
                   <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[10px] text-muted-foreground font-medium">{room.w}x{room.h}px</span>
+                    <span className="text-[10px] text-muted-foreground font-medium">{room.w} x {room.h} m</span>
                   </div>
                 </div>
               </button>
@@ -375,12 +378,12 @@ export default function LayoutEditor() {
                   dragMomentum={false}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ 
-                    x: room.x, 
-                    y: room.y, 
+                    x: mToPx(room.x), 
+                    y: mToPx(room.y), 
                     scale: isSelected ? 1.02 : 1, 
                     opacity: 1,
-                    width: room.width,
-                    height: room.height,
+                    width: mToPx(room.width),
+                    height: mToPx(room.height),
                     zIndex: isSelected ? 50 : 1
                   }}
                   onDragEnd={(e, info) => {
@@ -418,7 +421,7 @@ export default function LayoutEditor() {
                     )}
                     {isSelected && (
                        <div className="text-[9px] text-slate-500 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">
-                         {Math.round(room.width)} x {Math.round(room.height)}
+                         {room.width.toFixed(1)} x {room.height.toFixed(1)} m
                        </div>
                     )}
                   </div>
@@ -479,13 +482,13 @@ export default function LayoutEditor() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.width")}</Label>
-                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{widthDraft}px</span>
+                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{widthDraft.toFixed(1)} m</span>
                       </div>
                       <Slider 
                         value={[widthDraft]} 
-                        min={50} 
-                        max={400} 
-                        step={10} 
+                        min={1} 
+                        max={8} 
+                        step={0.1} 
                         onValueChange={([val]) => handleWidthChange(val)}
                         data-testid="slider-width"
                       />
@@ -494,13 +497,13 @@ export default function LayoutEditor() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                          <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.height")}</Label>
-                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{heightDraft}px</span>
+                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{heightDraft.toFixed(1)} m</span>
                       </div>
                       <Slider 
                         value={[heightDraft]} 
-                        min={50} 
-                        max={400} 
-                        step={10} 
+                        min={1} 
+                        max={8} 
+                        step={0.1} 
                         onValueChange={([val]) => handleHeightChange(val)}
                         data-testid="slider-height"
                       />

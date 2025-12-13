@@ -218,6 +218,54 @@ export function evaluateRoomSize(
   return { score: Math.round(score), assessment, actualSqM, recommendation };
 }
 
+export function evaluateRoomSizeM(
+  type: string, 
+  widthM: number, 
+  heightM: number
+): {
+  score: number;
+  assessment: "undersized" | "optimal" | "oversized";
+  actualSqM: number;
+  recommendation: string;
+} {
+  const normalizedType = normalizeRoomType(type);
+  const standard = ROOM_SIZE_STANDARDS[normalizedType];
+  if (!standard) {
+    return {
+      score: 50,
+      assessment: "optimal",
+      actualSqM: 0,
+      recommendation: "Unbekannter Raumtyp"
+    };
+  }
+
+  const actualSqM = widthM * heightM;
+
+  let score: number;
+  let assessment: "undersized" | "optimal" | "oversized";
+  let recommendation: string;
+
+  if (actualSqM < standard.minSqM) {
+    const deficit = ((standard.minSqM - actualSqM) / standard.minSqM) * 100;
+    score = Math.max(0, 50 - deficit);
+    assessment = "undersized";
+    recommendation = `Raum ist ${Math.round(deficit)}% unter dem Minimum. Empfehlung: mindestens ${standard.minSqM} m² gemäß ${standard.source}.`;
+  } else if (actualSqM > standard.maxSqM) {
+    const excess = ((actualSqM - standard.maxSqM) / standard.maxSqM) * 100;
+    score = Math.max(60, 90 - (excess * 0.5));
+    assessment = "oversized";
+    recommendation = `Raum ist ${Math.round(excess)}% über dem Maximum. Raumnutzung optimieren.`;
+  } else {
+    const distanceFromOptimal = Math.abs(actualSqM - standard.optimalSqM);
+    const range = standard.maxSqM - standard.minSqM;
+    score = 100 - ((distanceFromOptimal / range) * 20);
+    assessment = "optimal";
+    recommendation = `Raumgröße entspricht den deutschen Standards. Optimale Größe: ${standard.optimalSqM} m².`;
+  }
+
+  return { score: Math.round(score), assessment, actualSqM, recommendation };
+}
+
 export function evaluateStaffingRatios(
   doctors: number,
   nurses: number,

@@ -22,3 +22,8 @@ export function snapToGridM(m: number): number {
 export function clampM(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
+
+export function normalizeToMeters(value: number): number {
+  const LEGACY_PIXEL_THRESHOLD = 30; // Assumes medical practice layouts < 30m; old 40px grid positions get converted
+  return value >= LEGACY_PIXEL_THRESHOLD ? value / PX_PER_METER : value;
+}

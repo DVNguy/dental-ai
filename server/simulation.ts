@@ -3,9 +3,8 @@ import {
   ROOM_SIZE_STANDARDS,
   STAFFING_RATIOS,
   PATIENT_FLOW_METRICS,
-  evaluateRoomSize,
-  evaluateStaffingRatios,
-  pixelsToSqM
+  evaluateRoomSizeM,
+  evaluateStaffingRatios
 } from "./ai/benchmarks";
 import {
   getKnowledgePoweredScheduling,
@@ -13,16 +12,11 @@ import {
   getKnowledgePoweredLayout,
   type KnowledgePoweredLayout
 } from "./ai/artifactBenchmarks";
-import { 
-  normalizeRoomType, 
-  pxToMeters,
-  DEFAULT_LAYOUT_SCALE_PX_PER_METER 
-} from "@shared/roomTypes";
+import { normalizeRoomType } from "@shared/roomTypes";
 
 export interface SimulationParameters {
   patientVolume: number;
   operatingHours: number;
-  layoutScalePxPerMeter?: number;
 }
 
 export interface SimulationResult {
@@ -33,7 +27,7 @@ export interface SimulationResult {
   parameters: SimulationParameters;
 }
 
-function calculateDistancePx(x1: number, y1: number, x2: number, y2: number): number {
+function calculateDistanceM(x1: number, y1: number, x2: number, y2: number): number {
   return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
 }
 
@@ -46,7 +40,6 @@ function getRoomCenter(room: Room): { x: number; y: number } {
 
 async function calculateEfficiencyScore(
   rooms: Room[], 
-  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER,
   layoutConfig?: KnowledgePoweredLayout
 ): Promise<number> {
   if (rooms.length === 0) return 0;
@@ -73,8 +66,7 @@ async function calculateEfficiencyScore(
   if (reception && waiting) {
     const recCenter = getRoomCenter(reception);
     const waitCenter = getRoomCenter(waiting);
-    const distancePx = calculateDistancePx(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
-    const distanceM = pxToMeters(distancePx, scalePxPerMeter);
+    const distanceM = calculateDistanceM(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
     
     const benchmark = layout.distanceGuidelines.receptionToWaiting;
     if (distanceM <= benchmark.optimal) {
@@ -88,17 +80,16 @@ async function calculateEfficiencyScore(
 
   if (waiting && examRooms.length > 0) {
     const waitCenter = getRoomCenter(waiting);
-    const avgDistancePx = examRooms.reduce((sum, exam) => {
+    const avgDistanceM = examRooms.reduce((sum, exam) => {
       const examCenter = getRoomCenter(exam);
-      return sum + calculateDistancePx(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
+      return sum + calculateDistanceM(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceM = pxToMeters(avgDistancePx, scalePxPerMeter);
     const benchmark = layout.distanceGuidelines.waitingToExam;
     
-    if (distanceM <= benchmark.optimal) {
+    if (avgDistanceM <= benchmark.optimal) {
       score += 15;
-    } else if (distanceM <= benchmark.maxMeters) {
+    } else if (avgDistanceM <= benchmark.maxMeters) {
       score += 8;
     } else {
       score -= 5;
@@ -106,7 +97,7 @@ async function calculateEfficiencyScore(
   }
 
   examRooms.forEach(exam => {
-    const evaluation = evaluateRoomSize("exam", exam.width, exam.height, scalePxPerMeter);
+    const evaluation = evaluateRoomSizeM("exam", exam.width, exam.height);
     if (evaluation.assessment === "optimal") {
       score += 3;
     } else if (evaluation.assessment === "undersized") {
@@ -116,17 +107,16 @@ async function calculateEfficiencyScore(
 
   if (lab && examRooms.length > 0) {
     const labCenter = getRoomCenter(lab);
-    const avgDistancePx = examRooms.reduce((sum, exam) => {
+    const avgDistanceM = examRooms.reduce((sum, exam) => {
       const examCenter = getRoomCenter(exam);
-      return sum + calculateDistancePx(labCenter.x, labCenter.y, examCenter.x, examCenter.y);
+      return sum + calculateDistanceM(labCenter.x, labCenter.y, examCenter.x, examCenter.y);
     }, 0) / examRooms.length;
     
-    const distanceM = pxToMeters(avgDistancePx, scalePxPerMeter);
     const benchmark = layout.distanceGuidelines.examToLab;
     
-    if (distanceM <= benchmark.optimal) {
+    if (avgDistanceM <= benchmark.optimal) {
       score += 10;
-    } else if (distanceM <= benchmark.maxMeters) {
+    } else if (avgDistanceM <= benchmark.maxMeters) {
       score += 5;
     } else {
       score -= 3;
@@ -136,8 +126,7 @@ async function calculateEfficiencyScore(
   if (office && reception) {
     const officeCenter = getRoomCenter(office);
     const recCenter = getRoomCenter(reception);
-    const distancePx = calculateDistancePx(officeCenter.x, officeCenter.y, recCenter.x, recCenter.y);
-    const distanceM = pxToMeters(distancePx, scalePxPerMeter);
+    const distanceM = calculateDistanceM(officeCenter.x, officeCenter.y, recCenter.x, recCenter.y);
     
     if (distanceM < 6) score += 5;
     else if (distanceM < 10) score += 3;
@@ -290,9 +279,8 @@ export async function runSimulation(
     loadSchedulingDefaults(),
     getKnowledgePoweredLayout()
   ]);
-  const scale = parameters.layoutScalePxPerMeter || DEFAULT_LAYOUT_SCALE_PX_PER_METER;
   
-  const efficiencyScore = await calculateEfficiencyScore(rooms, scale, layoutConfig);
+  const efficiencyScore = await calculateEfficiencyScore(rooms, layoutConfig);
   const harmonyScore = calculateHarmonyScore(staff, rooms);
   const patientCapacity = calculatePatientCapacity(rooms, staff, parameters.operatingHours, schedulingDefaults);
   const waitTime = calculateWaitTime(
