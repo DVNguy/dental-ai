@@ -49,7 +49,8 @@ Preferred communication style: Simple, everyday language.
 
 **API Design**: RESTful endpoints organized by resource:
 - `/api/practices` - Practice CRUD operations
-- `/api/rooms` - Room management within practices
+- `/api/practices/:id/layout-efficiency` - Layout efficiency breakdown with detailed scoring
+- `/api/rooms` - Room management within practices (supports multi-floor layouts)
 - `/api/staff` - Staff member management
 - `/api/simulations` - Run and retrieve simulations
 - `/api/ai/*` - AI analysis and recommendations
