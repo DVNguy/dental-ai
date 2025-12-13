@@ -7,7 +7,7 @@ import {
   insertStaffSchema,
   insertSimulationSchema,
 } from "@shared/schema";
-import { runSimulation, type SimulationParameters } from "./simulation";
+import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
@@ -80,6 +80,16 @@ export async function registerRoutes(
       res.json(practice);
     } catch (error) {
       res.status(500).json({ error: "Failed to update budget" });
+    }
+  });
+
+  app.get("/api/practices/:id/layout-efficiency", async (req, res) => {
+    try {
+      const rooms = await storage.getRoomsByPracticeId(req.params.id);
+      const breakdown = await calculateLayoutEfficiencyBreakdown(rooms);
+      res.json(breakdown);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to calculate layout efficiency" });
     }
   });
 

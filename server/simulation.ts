@@ -13,6 +13,7 @@ import {
   type KnowledgePoweredLayout
 } from "./ai/artifactBenchmarks";
 import { normalizeRoomType } from "@shared/roomTypes";
+import { pxToM } from "@shared/units";
 
 export interface SimulationParameters {
   patientVolume: number;
@@ -27,11 +28,46 @@ export interface SimulationResult {
   parameters: SimulationParameters;
 }
 
+export interface LayoutEfficiencyBreakdown {
+  overallScore: number;
+  categories: {
+    patientFlow: {
+      score: number;
+      maxScore: number;
+      items: EfficiencyItem[];
+    };
+    roomSizing: {
+      score: number;
+      maxScore: number;
+      items: EfficiencyItem[];
+    };
+    essentialRooms: {
+      score: number;
+      maxScore: number;
+      items: EfficiencyItem[];
+    };
+    staffAccess: {
+      score: number;
+      maxScore: number;
+      items: EfficiencyItem[];
+    };
+  };
+  tips: string[];
+}
+
+export interface EfficiencyItem {
+  label: string;
+  status: "optimal" | "acceptable" | "needs_work" | "missing";
+  points: number;
+  maxPoints: number;
+  detail?: string;
+}
+
 function calculateDistanceM(x1: number, y1: number, x2: number, y2: number): number {
   return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
 }
 
-function getRoomCenter(room: Room): { x: number; y: number } {
+function getRoomCenter(room: { x: number; y: number; width: number; height: number }): { x: number; y: number } {
   return {
     x: room.x + room.width / 2,
     y: room.y + room.height / 2,
@@ -268,6 +304,307 @@ function calculateWaitTime(
   }
 
   return Math.max(5, Math.min(60, Math.round(waitTime)));
+}
+
+interface RoomInMeters {
+  id: string;
+  name: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  floor: number;
+}
+
+function convertRoomToMeters(room: Room): RoomInMeters {
+  return {
+    id: room.id,
+    name: room.name,
+    type: room.type,
+    x: pxToM(room.x),
+    y: pxToM(room.y),
+    width: pxToM(room.width),
+    height: pxToM(room.height),
+    floor: room.floor,
+  };
+}
+
+export async function calculateLayoutEfficiencyBreakdown(
+  rooms: Room[]
+): Promise<LayoutEfficiencyBreakdown> {
+  const layout = await getKnowledgePoweredLayout();
+  
+  const roomsM = rooms.map(convertRoomToMeters);
+  
+  const roomsByType = new Map<string, RoomInMeters[]>();
+  roomsM.forEach(room => {
+    const normalizedType = normalizeRoomType(room.type);
+    if (!roomsByType.has(normalizedType)) {
+      roomsByType.set(normalizedType, []);
+    }
+    roomsByType.get(normalizedType)!.push(room);
+  });
+
+  const reception = roomsByType.get("reception")?.[0];
+  const waiting = roomsByType.get("waiting")?.[0];
+  const examRooms = roomsByType.get("exam") || [];
+  const lab = roomsByType.get("lab")?.[0];
+  const office = roomsByType.get("office")?.[0];
+
+  const patientFlowItems: EfficiencyItem[] = [];
+  const roomSizingItems: EfficiencyItem[] = [];
+  const essentialRoomsItems: EfficiencyItem[] = [];
+  const staffAccessItems: EfficiencyItem[] = [];
+  const tips: string[] = [];
+
+  let patientFlowScore = 0;
+  const patientFlowMax = 27;
+  let roomSizingScore = 0;
+  let roomSizingMax = 0;
+  let essentialRoomsScore = 0;
+  const essentialRoomsMax = 45;
+  let staffAccessScore = 0;
+  const staffAccessMax = 5;
+
+  if (reception) {
+    essentialRoomsScore += 15;
+    essentialRoomsItems.push({
+      label: "Reception",
+      status: "optimal",
+      points: 15,
+      maxPoints: 15,
+      detail: "Reception area present"
+    });
+  } else {
+    essentialRoomsItems.push({
+      label: "Reception",
+      status: "missing",
+      points: 0,
+      maxPoints: 15,
+      detail: "Add a reception area"
+    });
+    tips.push("Add a reception area for patient check-in.");
+  }
+
+  if (waiting) {
+    essentialRoomsScore += 10;
+    essentialRoomsItems.push({
+      label: "Waiting Room",
+      status: "optimal",
+      points: 10,
+      maxPoints: 10,
+      detail: "Waiting area present"
+    });
+  } else {
+    essentialRoomsItems.push({
+      label: "Waiting Room",
+      status: "missing",
+      points: 0,
+      maxPoints: 10,
+      detail: "Add a waiting area"
+    });
+    tips.push("Add a waiting room for patients.");
+  }
+
+  if (examRooms.length > 0) {
+    essentialRoomsScore += 20;
+    essentialRoomsItems.push({
+      label: "Exam Rooms",
+      status: "optimal",
+      points: 20,
+      maxPoints: 20,
+      detail: `${examRooms.length} exam room(s) present`
+    });
+  } else {
+    essentialRoomsItems.push({
+      label: "Exam Rooms",
+      status: "missing",
+      points: 0,
+      maxPoints: 20,
+      detail: "Add at least one exam room"
+    });
+    tips.push("Add exam rooms for patient consultations.");
+  }
+
+  if (reception && waiting) {
+    const recCenter = getRoomCenter(reception);
+    const waitCenter = getRoomCenter(waiting);
+    const distanceM = calculateDistanceM(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
+    const benchmark = layout.distanceGuidelines.receptionToWaiting;
+    
+    if (distanceM <= benchmark.optimal) {
+      patientFlowScore += 12;
+      patientFlowItems.push({
+        label: "Reception → Waiting",
+        status: "optimal",
+        points: 12,
+        maxPoints: 12,
+        detail: `${distanceM.toFixed(1)}m (optimal: ≤${benchmark.optimal}m)`
+      });
+    } else if (distanceM <= benchmark.maxMeters) {
+      patientFlowScore += 8;
+      patientFlowItems.push({
+        label: "Reception → Waiting",
+        status: "acceptable",
+        points: 8,
+        maxPoints: 12,
+        detail: `${distanceM.toFixed(1)}m (acceptable: ≤${benchmark.maxMeters}m)`
+      });
+    } else {
+      patientFlowItems.push({
+        label: "Reception → Waiting",
+        status: "needs_work",
+        points: 0,
+        maxPoints: 12,
+        detail: `${distanceM.toFixed(1)}m (max: ${benchmark.maxMeters}m)`
+      });
+      tips.push("Move waiting room closer to reception.");
+    }
+  }
+
+  if (waiting && examRooms.length > 0) {
+    const waitCenter = getRoomCenter(waiting);
+    const avgDistanceM = examRooms.reduce((sum, exam) => {
+      const examCenter = getRoomCenter(exam);
+      return sum + calculateDistanceM(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
+    }, 0) / examRooms.length;
+    const benchmark = layout.distanceGuidelines.waitingToExam;
+    
+    if (avgDistanceM <= benchmark.optimal) {
+      patientFlowScore += 15;
+      patientFlowItems.push({
+        label: "Waiting → Exam Rooms",
+        status: "optimal",
+        points: 15,
+        maxPoints: 15,
+        detail: `Avg ${avgDistanceM.toFixed(1)}m (optimal: ≤${benchmark.optimal}m)`
+      });
+    } else if (avgDistanceM <= benchmark.maxMeters) {
+      patientFlowScore += 8;
+      patientFlowItems.push({
+        label: "Waiting → Exam Rooms",
+        status: "acceptable",
+        points: 8,
+        maxPoints: 15,
+        detail: `Avg ${avgDistanceM.toFixed(1)}m (acceptable: ≤${benchmark.maxMeters}m)`
+      });
+    } else {
+      patientFlowItems.push({
+        label: "Waiting → Exam Rooms",
+        status: "needs_work",
+        points: 0,
+        maxPoints: 15,
+        detail: `Avg ${avgDistanceM.toFixed(1)}m (max: ${benchmark.maxMeters}m)`
+      });
+      tips.push("Position exam rooms closer to the waiting area.");
+    }
+  }
+
+  roomsM.forEach(room => {
+    const normalizedType = normalizeRoomType(room.type);
+    const standard = ROOM_SIZE_STANDARDS[normalizedType];
+    if (standard) {
+      roomSizingMax += 3;
+      const areaM = room.width * room.height;
+      const evaluation = evaluateRoomSizeM(normalizedType, room.width, room.height);
+      
+      if (evaluation.assessment === "optimal") {
+        roomSizingScore += 3;
+        roomSizingItems.push({
+          label: room.name || normalizedType,
+          status: "optimal",
+          points: 3,
+          maxPoints: 3,
+          detail: `${areaM.toFixed(1)}m² (optimal: ${standard.optimalSqM}m²)`
+        });
+      } else if (evaluation.assessment === "undersized") {
+        roomSizingItems.push({
+          label: room.name || normalizedType,
+          status: "needs_work",
+          points: 0,
+          maxPoints: 3,
+          detail: `${areaM.toFixed(1)}m² (min: ${standard.minSqM}m²)`
+        });
+        tips.push(`Increase size of ${room.name || normalizedType} (currently ${areaM.toFixed(1)}m², min: ${standard.minSqM}m²).`);
+      } else {
+        roomSizingScore += 1;
+        roomSizingItems.push({
+          label: room.name || normalizedType,
+          status: "acceptable",
+          points: 1,
+          maxPoints: 3,
+          detail: `${areaM.toFixed(1)}m² (oversized, max: ${standard.maxSqM}m²)`
+        });
+      }
+    }
+  });
+
+  if (office && reception) {
+    const officeCenter = getRoomCenter(office);
+    const recCenter = getRoomCenter(reception);
+    const distanceM = calculateDistanceM(officeCenter.x, officeCenter.y, recCenter.x, recCenter.y);
+    
+    if (distanceM < 6) {
+      staffAccessScore += 5;
+      staffAccessItems.push({
+        label: "Office → Reception",
+        status: "optimal",
+        points: 5,
+        maxPoints: 5,
+        detail: `${distanceM.toFixed(1)}m (optimal: <6m)`
+      });
+    } else if (distanceM < 10) {
+      staffAccessScore += 3;
+      staffAccessItems.push({
+        label: "Office → Reception",
+        status: "acceptable",
+        points: 3,
+        maxPoints: 5,
+        detail: `${distanceM.toFixed(1)}m (acceptable: <10m)`
+      });
+    } else {
+      staffAccessItems.push({
+        label: "Office → Reception",
+        status: "needs_work",
+        points: 0,
+        maxPoints: 5,
+        detail: `${distanceM.toFixed(1)}m (optimal: <6m)`
+      });
+      tips.push("Consider placing doctor's office closer to reception for quick access.");
+    }
+  }
+
+  const totalScore = patientFlowScore + roomSizingScore + essentialRoomsScore + staffAccessScore;
+  const totalMax = patientFlowMax + Math.max(roomSizingMax, 9) + essentialRoomsMax + staffAccessMax;
+  const overallScore = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
+
+  return {
+    overallScore: Math.max(0, Math.min(100, overallScore)),
+    categories: {
+      patientFlow: {
+        score: patientFlowScore,
+        maxScore: patientFlowMax,
+        items: patientFlowItems
+      },
+      roomSizing: {
+        score: roomSizingScore,
+        maxScore: roomSizingMax || 9,
+        items: roomSizingItems
+      },
+      essentialRooms: {
+        score: essentialRoomsScore,
+        maxScore: essentialRoomsMax,
+        items: essentialRoomsItems
+      },
+      staffAccess: {
+        score: staffAccessScore,
+        maxScore: staffAccessMax,
+        items: staffAccessItems
+      }
+    },
+    tips: tips.slice(0, 5)
+  };
 }
 
 export async function runSimulation(
