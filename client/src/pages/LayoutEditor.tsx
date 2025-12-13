@@ -799,28 +799,6 @@ export default function LayoutEditor() {
             className="absolute inset-0 w-full h-full pointer-events-none z-30"
             data-testid="svg-connections"
           >
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-              >
-                <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
-              </marker>
-              <marker
-                id="arrowhead-preview"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-              >
-                <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e" />
-              </marker>
-            </defs>
             {connectionArrows.map(arrow => (
               <g key={arrow.id} data-testid={`connection-${arrow.id}`}>
                 <path
@@ -829,7 +807,6 @@ export default function LayoutEditor() {
                   strokeWidth="3"
                   strokeLinecap="round"
                   fill="none"
-                  markerEnd="url(#arrowhead)"
                   className="transition-all duration-200"
                 />
                 {connectMode && (
@@ -866,7 +843,6 @@ export default function LayoutEditor() {
                 strokeLinecap="round"
                 strokeDasharray="8 4"
                 fill="none"
-                markerEnd="url(#arrowhead-preview)"
                 className="animate-pulse"
                 data-testid="preview-connection"
               />
