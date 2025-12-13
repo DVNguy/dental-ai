@@ -1,3 +1,5 @@
+import { PX_PER_METER, pxToM, mToPx, px2ToM2 } from "./units";
+
 export const CANONICAL_ROOM_TYPES = [
   "reception",
   "waiting", 
@@ -79,18 +81,22 @@ export function isValidRoomType(type: string): boolean {
   return normalized in ROOM_TYPE_ALIASES;
 }
 
-export const DEFAULT_LAYOUT_SCALE_PX_PER_METER = 50;
+/** @deprecated Use PX_PER_METER from shared/units.ts */
+export const DEFAULT_LAYOUT_SCALE_PX_PER_METER = PX_PER_METER;
 
-export function pxToMeters(px: number, scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
+/** @deprecated Use pxToM from shared/units.ts */
+export function pxToMeters(px: number, scalePxPerMeter: number = PX_PER_METER): number {
   return px / scalePxPerMeter;
 }
 
-export function metersToPx(meters: number, scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
+/** @deprecated Use mToPx from shared/units.ts */
+export function metersToPx(meters: number, scalePxPerMeter: number = PX_PER_METER): number {
   return meters * scalePxPerMeter;
 }
 
-export function pxAreaToSqM(widthPx: number, heightPx: number, scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER): number {
-  const widthM = pxToMeters(widthPx, scalePxPerMeter);
-  const heightM = pxToMeters(heightPx, scalePxPerMeter);
+/** @deprecated Use px2ToM2 from shared/units.ts */
+export function pxAreaToSqM(widthPx: number, heightPx: number, scalePxPerMeter: number = PX_PER_METER): number {
+  const widthM = widthPx / scalePxPerMeter;
+  const heightM = heightPx / scalePxPerMeter;
   return Math.round(widthM * heightM * 10) / 10;
 }

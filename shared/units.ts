@@ -15,6 +15,10 @@ export function px2ToM2(widthPx: number, heightPx: number): number {
   return Math.round(widthM * heightM * 10) / 10;
 }
 
+export function sqM(widthM: number, heightM: number): number {
+  return Math.round(widthM * heightM * 10) / 10;
+}
+
 export function snapToGridM(m: number): number {
   return Math.round(m / GRID_M) * GRID_M;
 }
@@ -24,6 +28,14 @@ export function clampM(val: number, min: number, max: number): number {
 }
 
 export function normalizeToMeters(value: number): number {
-  const LEGACY_PIXEL_THRESHOLD = 30; // Assumes medical practice layouts < 30m; old 40px grid positions get converted
+  const LEGACY_PIXEL_THRESHOLD = 30;
   return value >= LEGACY_PIXEL_THRESHOLD ? value / PX_PER_METER : value;
+}
+
+export function formatM(value: number, decimals: number = 1): string {
+  return `${value.toFixed(decimals)} m`;
+}
+
+export function formatSqM(value: number, decimals: number = 1): string {
+  return `${value.toFixed(decimals)} m²`;
 }

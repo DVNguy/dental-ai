@@ -1,0 +1,41 @@
+Implementiere Step A (Units + Performance) minimal-invasiv.
+
+A1) Einheitensystem zentralisieren
+- Lege shared/units.ts an (oder shared/units/index.ts), exportiere:
+  - PX_PER_M (prüfe bestehende Umrechnungen, nutze den Faktor, der aktuell schon "gut" wirkt; wenn Grid 40px ist, ist 40px=1m naheliegend)
+  - pxToM(px): number
+  - mToPx(m): number
+  - pxRectToSqM(wPx,hPx): number
+  - formatM(value, decimals=1): string, formatSqM(value, decimals=1): string
+
+- Ersetze in server/simulation.ts die Distanz-Umrechnung (px->ft->m) durch pxToM aus shared/units.
+- Stelle sicher, dass pixelsToSqM (falls vorhanden) intern denselben Faktor nutzt oder entferne Dubletten.
+
+A2) LayoutEditor: UI in Meter anzeigen (intern px behalten)
+- In client/src/pages/LayoutEditor.tsx:
+  - Zeige in ROOM_TYPES statt “150x100px” zusätzlich/anstatt “3,8 m × 2,5 m” (aus pxToM).
+  - Im Selected-Room Panel:
+    - Anzeige: Breite/Höhe in m, plus Fläche in m².
+    - Slider bleiben technisch in px (min/max), aber Labels/Badges zeigen m/m².
+  - Optional: kleines “Scale” Info-Label: “1 m = X px”.
+
+A3) Performance: kein API Call pro Pixel / pro Buchstabe
+- Name Input:
+  - Local state für name + debounce (z.B. 400–600ms) bevor updateRoomMutation ausgeführt wird.
+  - OnBlur sofort committen.
+- Slider:
+  - Nutze onValueCommit (falls verfügbar) für API commit, onValueChange nur fürs lokale Preview.
+  - Wenn onValueCommit nicht verfügbar: throttle (200ms) + final commit onPointerUp/onMouseUp.
+- Drag:
+  - Stelle sicher, dass Drag direkt der Maus folgt (keine CSS transition auf transform, dragElastic=0).
+  - Implementiere optimistic update für Position:
+    - onMutate: update React Query cache für ["rooms", practiceId]
+    - onError: rollback
+    - Vermeide invalidateQueries(["rooms"]) bei jedem Update (optimistic reicht).
+  - InvalidateQueries(["ai-analysis", practiceId]) nur debounced (z.B. 1500–2000ms idle), NICHT pro Update.
+
+A4) Dokumentiere kurz:
+- Welche Dateien geändert
+- Wie testen (Commands aus package.json, plus manuelle Checks: Drag smooth, Name tippen -> 1 Request, Slider -> 1 Request)
+
+Ändere nur, was nötig ist. Kein UI-Redesign, keine großen Rewrites.

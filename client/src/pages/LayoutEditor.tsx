@@ -12,7 +12,7 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Room } from "@shared/schema";
-import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters } from "@shared/units";
+import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 
 export default function LayoutEditor() {
   const { t } = useTranslation();
@@ -505,6 +505,13 @@ export default function LayoutEditor() {
                         onValueChange={([val]) => handleHeightChange(val)}
                         data-testid="slider-height"
                       />
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2 border-t border-border/30">
+                      <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.area")}</Label>
+                      <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-bold" data-testid="text-room-area">
+                        {sqM(widthDraft, heightDraft)} m²
+                      </span>
                     </div>
                   </div>
 
