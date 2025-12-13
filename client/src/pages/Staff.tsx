@@ -101,13 +101,14 @@ function RatioCard({
         <Badge 
           variant="secondary" 
           className={cn(
-            "text-[10px] px-1.5 py-0.5 shrink-0",
+            "text-[9px] px-1.5 py-0.5 shrink-0 text-center leading-tight",
             isOptimal ? "bg-green-100 text-green-700" :
             needsAttention ? "bg-red-100 text-red-700" :
             "bg-yellow-100 text-yellow-700"
           )}
         >
-          {score}%
+          <span className="block font-bold">{score}%</span>
+          <span className="block font-normal">{t("staff.match")}</span>
         </Badge>
       </div>
       

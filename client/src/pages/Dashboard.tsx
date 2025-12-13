@@ -71,7 +71,7 @@ function AIHealthScore({ score, isLoading, t }: { score: number; isLoading: bool
           >
             {safeScore}
           </motion.div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{t("dashboard.healthScore")}</div>
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium leading-tight text-center max-w-[80px]">{t("dashboard.healthScore")}</div>
         </div>
       </div>
       <motion.div 
