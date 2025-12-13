@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import type { Room, Workflow, WorkflowConnection } from "@shared/schema";
 import type { LayoutEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
+import { METERS_PER_TILE, classifyRoomSize, roomSizeBucketLabel, roomSizeBucketColor } from "@shared/layoutUnits";
 
 function computeBezierPath(fromRoom: Room, toRoom: Room): { path: string; startX: number; startY: number; endX: number; endY: number } {
   const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
@@ -924,7 +925,10 @@ export default function LayoutEditor() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.width")}</Label>
-                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{widthDraft.toFixed(1)} m</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded" data-testid="text-width-tiles">{Math.round(widthDraft / METERS_PER_TILE)} Tiles</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{widthDraft.toFixed(1)} m</span>
+                        </div>
                       </div>
                       <Slider 
                         value={[widthDraft]} 
@@ -939,7 +943,10 @@ export default function LayoutEditor() {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                          <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.height")}</Label>
-                        <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">{heightDraft.toFixed(1)} m</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded" data-testid="text-height-tiles">{Math.round(heightDraft / METERS_PER_TILE)} Tiles</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{heightDraft.toFixed(1)} m</span>
+                        </div>
                       </div>
                       <Slider 
                         value={[heightDraft]} 
@@ -953,9 +960,14 @@ export default function LayoutEditor() {
                     
                     <div className="flex justify-between items-center pt-2 border-t border-border/30">
                       <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.area")}</Label>
-                      <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-bold" data-testid="text-room-area">
-                        {sqM(widthDraft, heightDraft)} m²
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("text-xs font-mono px-1.5 py-0.5 rounded font-medium", roomSizeBucketColor(classifyRoomSize(selectedRoom.type, sqM(widthDraft, heightDraft))))} data-testid="text-room-bucket">
+                          {roomSizeBucketLabel(classifyRoomSize(selectedRoom.type, sqM(widthDraft, heightDraft)))}
+                        </span>
+                        <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-bold" data-testid="text-room-area">
+                          ~{sqM(widthDraft, heightDraft)} m²
+                        </span>
+                      </div>
                     </div>
                     
                     <div className="flex justify-between items-center pt-2">
