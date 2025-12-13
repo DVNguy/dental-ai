@@ -312,8 +312,11 @@ export default function LayoutEditor() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && connectMode) {
-        setPendingFromRoomId(null);
-        if (!pendingFromRoomId) {
+        if (pendingFromRoomId) {
+          setPendingFromRoomId(null);
+          setMousePos(null);
+          setHoverRoomId(null);
+        } else {
           setConnectMode(false);
         }
       }
