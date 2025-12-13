@@ -25,6 +25,7 @@ export const rooms = pgTable("rooms", {
   y: integer("y").notNull(),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
+  floor: integer("floor").notNull().default(0),
 });
 
 export const staff = pgTable("staff", {
