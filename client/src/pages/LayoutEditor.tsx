@@ -377,7 +377,7 @@ export default function LayoutEditor() {
                   animate={{ 
                     x: room.x, 
                     y: room.y, 
-                    scale: 1, 
+                    scale: isSelected ? 1.02 : 1, 
                     opacity: 1,
                     width: room.width,
                     height: room.height,
@@ -388,9 +388,9 @@ export default function LayoutEditor() {
                     handleDragEnd(room, info, shiftPressed);
                   }}
                   className={cn(
-                    "absolute rounded-lg border-2 flex flex-col items-center justify-center cursor-move select-none transition-all duration-200 group",
+                    "absolute rounded-lg border-2 flex flex-col items-center justify-center cursor-move select-none transition-colors transition-shadow duration-200 will-change-transform group",
                     typeDef?.color,
-                    isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50 scale-[1.02]" : "hover:shadow-lg hover:border-primary/50"
+                    isSelected ? "ring-4 ring-primary/20 border-primary shadow-2xl z-50" : "hover:shadow-lg hover:border-primary/50"
                   )}
                   data-testid={`room-${room.id}`}
                 >
