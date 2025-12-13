@@ -4,7 +4,11 @@ export const CANONICAL_ROOM_TYPES = [
   "exam",
   "lab",
   "office",
-  "storage"
+  "sterilization",
+  "storage",
+  "toilet",
+  "kitchen",
+  "changing"
 ] as const;
 
 export type CanonicalRoomType = typeof CANONICAL_ROOM_TYPES[number];
@@ -38,10 +42,31 @@ const ROOM_TYPE_ALIASES: Record<string, CanonicalRoomType> = {
   "verwaltung": "office",
   "personalraum": "office",
   
+  "sterilization": "sterilization",
+  "sterilisation": "sterilization",
+  "sterilisationsraum": "sterilization",
+  "steri": "sterilization",
+  
   "storage": "storage",
   "lager": "storage",
-  "sterilisation": "storage",
-  "sterilisationsraum": "storage"
+  "lagerraum": "storage",
+  
+  "toilet": "toilet",
+  "toilette": "toilet",
+  "wc": "toilet",
+  "badezimmer": "toilet",
+  "sanitär": "toilet",
+  
+  "kitchen": "kitchen",
+  "küche": "kitchen",
+  "kueche": "kitchen",
+  "pausenraum": "kitchen",
+  "teeküche": "kitchen",
+  
+  "changing": "changing",
+  "umkleide": "changing",
+  "umkleideraum": "changing",
+  "garderobe": "changing"
 };
 
 export function normalizeRoomType(type: string): CanonicalRoomType {

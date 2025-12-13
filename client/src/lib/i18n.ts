@@ -127,6 +127,11 @@ const resources = {
       "rooms.exam": "Exam Room",
       "rooms.lab": "Laboratory",
       "rooms.office": "Doctor Office",
+      "rooms.sterilization": "Sterilization",
+      "rooms.storage": "Storage",
+      "rooms.toilet": "Toilet",
+      "rooms.kitchen": "Kitchen",
+      "rooms.changing": "Changing Room",
       "rooms.room": "Room",
       "rooms.rooms": "Rooms",
 
@@ -322,6 +327,11 @@ const resources = {
       "rooms.exam": "Behandlungsraum",
       "rooms.lab": "Labor",
       "rooms.office": "Arztzimmer",
+      "rooms.sterilization": "Sterilisation",
+      "rooms.storage": "Lagerraum",
+      "rooms.toilet": "Toilette",
+      "rooms.kitchen": "Küche",
+      "rooms.changing": "Umkleide",
       "rooms.room": "Raum",
       "rooms.rooms": "Räume",
 

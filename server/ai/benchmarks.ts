@@ -50,6 +50,36 @@ export const ROOM_SIZE_STANDARDS: Record<string, RoomSizeStandard> = {
     maxSqM: 18,
     optimalSqM: 14,
     source: "Arbeitsstättenverordnung (ArbStättV) - ASR A1.2"
+  },
+  sterilization: {
+    minSqM: 8,
+    maxSqM: 14,
+    optimalSqM: 10.5,
+    source: "RKI Aufbereitung Medizinprodukte & Hygieneverordnung"
+  },
+  storage: {
+    minSqM: 4,
+    maxSqM: 10,
+    optimalSqM: 6,
+    source: "Arbeitsstättenverordnung (ArbStättV) - Lagerräume"
+  },
+  toilet: {
+    minSqM: 3,
+    maxSqM: 6,
+    optimalSqM: 4.4,
+    source: "DIN 18040 Barrierefreies Bauen - Sanitärräume"
+  },
+  kitchen: {
+    minSqM: 6,
+    maxSqM: 12,
+    optimalSqM: 7.5,
+    source: "Arbeitsstättenverordnung (ArbStättV) - ASR A4.2 Pausenräume"
+  },
+  changing: {
+    minSqM: 5,
+    maxSqM: 10,
+    optimalSqM: 6.6,
+    source: "Arbeitsstättenverordnung (ArbStättV) - ASR A4.1 Umkleideräume"
   }
 };
 
