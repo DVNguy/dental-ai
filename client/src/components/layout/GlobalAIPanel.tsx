@@ -154,7 +154,7 @@ export function GlobalAIPanel() {
   const [location] = useLocation();
   const { practiceId } = usePractice();
   const [question, setQuestion] = useState("");
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const { data: analysis, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["ai-analysis", practiceId],
