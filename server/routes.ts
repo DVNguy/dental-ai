@@ -116,13 +116,26 @@ export async function registerRoutes(
         const connections = allConnections.flat();
         workflowMetrics = computeWorkflowMetrics(rooms, connections);
         
-        if (workflowMetrics && workflowMetrics.longestConnections.length > 0) {
+        if (workflowMetrics) {
           for (const conn of workflowMetrics.longestConnections) {
             if (conn.distanceMeters > 5 && workflowTips.length < 3) {
               workflowTips.push(
-                `Schritt ${conn.fromName} → ${conn.toName} ist ${conn.distanceMeters}m – Räume näher platzieren.`
+                `Diese Verbindung ist besonders lang: ${conn.fromName} → ${conn.toName} (${conn.distanceMeters}m) – Räume näher platzieren.`
               );
             }
+          }
+          
+          if (workflowMetrics.crossingConnections.length > 0 && workflowTips.length < 3) {
+            const crossing = workflowMetrics.crossingConnections[0];
+            workflowTips.push(
+              `Diese Verbindung kreuzt andere Flows (potenzielle Kollisionen): ${crossing.conn1} × ${crossing.conn2}`
+            );
+          }
+          
+          if (workflowMetrics.coreRoomDistanceIssue && workflowTips.length < 3) {
+            workflowTips.push(
+              `Empfang/Wartebereich/Behandlung sind zu weit auseinander (${workflowMetrics.coreRoomDistanceMeters}m gesamt, optimal <8m).`
+            );
           }
         }
       }

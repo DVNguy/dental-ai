@@ -8,6 +8,9 @@ export interface WorkflowMetrics {
   backtrackingCount: number;
   longestConnections: Array<{ fromName: string; toName: string; distanceMeters: number }>;
   motionWasteScore: number;
+  crossingConnections: Array<{ conn1: string; conn2: string }>;
+  coreRoomDistanceIssue: boolean;
+  coreRoomDistanceMeters: number;
 }
 
 export interface LayoutFlowBreakdown {
@@ -86,6 +89,25 @@ function calculateDistance(r1: RoomM, r2: RoomM): number {
   );
   const floorDiff = Math.abs(r1.floor - r2.floor);
   return horizontalDist + floorDiff * FLOOR_PENALTY_METERS;
+}
+
+function doSegmentsIntersect(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
+  p4: { x: number; y: number }
+): boolean {
+  const ccw = (A: { x: number; y: number }, B: { x: number; y: number }, C: { x: number; y: number }) =>
+    (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+  
+  if ((p1.x === p3.x && p1.y === p3.y) || (p1.x === p4.x && p1.y === p4.y) ||
+      (p2.x === p3.x && p2.y === p3.y) || (p2.x === p4.x && p2.y === p4.y)) {
+    return false;
+  }
+  
+  return (
+    ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4)
+  );
 }
 
 function findClosestRoom(from: RoomM, candidates: RoomM[]): { room: RoomM; distance: number } | null {
@@ -168,6 +190,10 @@ export function computeWorkflowMetrics(
     distanceMeters: number;
     fromRoomId: string;
     toRoomId: string;
+    fromCenter: { x: number; y: number };
+    toCenter: { x: number; y: number };
+    fromFloor: number;
+    toFloor: number;
   }> = [];
 
   let totalDistanceMeters = 0;
@@ -187,6 +213,10 @@ export function computeWorkflowMetrics(
       distanceMeters: Math.round(distance * 10) / 10,
       fromRoomId: conn.fromRoomId,
       toRoomId: conn.toRoomId,
+      fromCenter: getRoomCenter(fromRoom),
+      toCenter: getRoomCenter(toRoom),
+      fromFloor: fromRoom.floor,
+      toFloor: toRoom.floor,
     });
 
     const pairKey = [conn.fromRoomId, conn.toRoomId].sort().join("-");
@@ -195,6 +225,61 @@ export function computeWorkflowMetrics(
       backtrackingCount++;
     }
     visitedPairs.add(pairKey);
+  }
+
+  const crossingConnections: Array<{ conn1: string; conn2: string }> = [];
+  for (let i = 0; i < connectionDistances.length; i++) {
+    for (let j = i + 1; j < connectionDistances.length; j++) {
+      const c1 = connectionDistances[i];
+      const c2 = connectionDistances[j];
+      const c1SameFloor = c1.fromFloor === c1.toFloor;
+      const c2SameFloor = c2.fromFloor === c2.toFloor;
+      const bothOnSameFloor = c1SameFloor && c2SameFloor && c1.fromFloor === c2.fromFloor;
+      
+      if (bothOnSameFloor && doSegmentsIntersect(c1.fromCenter, c1.toCenter, c2.fromCenter, c2.toCenter)) {
+        crossingConnections.push({
+          conn1: `${c1.fromName} → ${c1.toName}`,
+          conn2: `${c2.fromName} → ${c2.toName}`,
+        });
+      }
+    }
+  }
+
+  const roomsByType = new Map<string, RoomM[]>();
+  roomsM.forEach((r) => {
+    if (!roomsByType.has(r.type)) roomsByType.set(r.type, []);
+    roomsByType.get(r.type)!.push(r);
+  });
+
+  const CORE_ROOM_MAX_DISTANCE = 8;
+  let coreRoomDistanceMeters = 0;
+  let coreRoomDistanceIssue = false;
+
+  const receptions = roomsByType.get("reception") || [];
+  const waitings = roomsByType.get("waiting") || [];
+  const exams = roomsByType.get("exam") || [];
+
+  if (receptions.length > 0 && waitings.length > 0 && exams.length > 0) {
+    let minChainDistance = Infinity;
+    
+    for (const reception of receptions) {
+      for (const waiting of waitings) {
+        for (const exam of exams) {
+          const recToWait = calculateDistance(reception, waiting);
+          const waitToExam = calculateDistance(waiting, exam);
+          const chainDistance = recToWait + waitToExam;
+          if (chainDistance < minChainDistance) {
+            minChainDistance = chainDistance;
+          }
+        }
+      }
+    }
+    
+    coreRoomDistanceMeters = Math.round(minChainDistance * 10) / 10;
+
+    if (coreRoomDistanceMeters > CORE_ROOM_MAX_DISTANCE) {
+      coreRoomDistanceIssue = true;
+    }
   }
 
   const avgStepDistanceMeters =
@@ -222,6 +307,8 @@ export function computeWorkflowMetrics(
     motionWasteScore += Math.min(30, (avgStepDistanceMeters - OPTIMAL_AVG_STEP) * 5);
   }
   motionWasteScore += backtrackingCount * 5;
+  motionWasteScore += crossingConnections.length * 3;
+  if (coreRoomDistanceIssue) motionWasteScore += 10;
   motionWasteScore = Math.min(100, Math.round(motionWasteScore));
 
   return {
@@ -230,6 +317,9 @@ export function computeWorkflowMetrics(
     backtrackingCount,
     longestConnections,
     motionWasteScore,
+    crossingConnections,
+    coreRoomDistanceIssue,
+    coreRoomDistanceMeters,
   };
 }
 
