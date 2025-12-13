@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2 } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Room } from "@shared/schema";
+import type { LayoutEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 
 export default function LayoutEditor() {
@@ -59,6 +60,14 @@ export default function LayoutEditor() {
     })),
   });
 
+  const { data: efficiencyData } = useQuery<LayoutEfficiencyResult>({
+    queryKey: ["layout-efficiency", practiceId],
+    queryFn: () => api.layout.efficiency(practiceId!),
+    enabled: !!practiceId && rooms.length > 0,
+    staleTime: 2000,
+    refetchOnWindowFocus: false,
+  });
+
   const getCanvasBoundsM = useCallback(() => {
     if (canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
@@ -71,6 +80,7 @@ export default function LayoutEditor() {
     clearTimeout(aiInvalidateTimer.current);
     aiInvalidateTimer.current = setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     }, 2000);
   }, [queryClient, practiceId]);
 
@@ -411,6 +421,48 @@ export default function LayoutEditor() {
               backgroundSize: '40px 40px'
             }}
           />
+          
+          {efficiencyData && (
+            <div 
+              className="absolute bottom-4 right-4 w-64 bg-background/95 backdrop-blur-sm shadow-xl rounded-xl border p-3 z-40 pointer-events-auto"
+              data-testid="card-layout-efficiency"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    {t("layout.efficiencyScore", "Layout-Effizienz")}
+                  </span>
+                </div>
+                <div className={cn(
+                  "text-lg font-bold",
+                  efficiencyData.score >= 70 ? "text-green-600" : efficiencyData.score >= 40 ? "text-amber-600" : "text-red-600"
+                )} data-testid="text-efficiency-score">
+                  {efficiencyData.score}/100
+                </div>
+              </div>
+              
+              {efficiencyData.breakdown.privacyRisk && (
+                <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-red-50 border border-red-200 rounded-lg" data-testid="badge-privacy-risk">
+                  <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                  <span className="text-[10px] font-medium text-red-700">
+                    {t("layout.privacyRisk", "Datenschutzrisiko: Empfang zu nah am Wartebereich")}
+                  </span>
+                </div>
+              )}
+              
+              {efficiencyData.tips.length > 0 && (
+                <div className="space-y-1.5">
+                  {efficiencyData.tips.slice(0, 3).map((tip, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <Lightbulb className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-muted-foreground leading-tight" data-testid={`text-tip-${i}`}>{tip}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           
           <AnimatePresence>
             {rooms.filter(r => r.floor === currentFloor).map((room) => {

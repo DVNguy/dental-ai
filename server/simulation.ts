@@ -12,6 +12,7 @@ import {
   getKnowledgePoweredLayout,
   type KnowledgePoweredLayout
 } from "./ai/artifactBenchmarks";
+import { computeLayoutEfficiency } from "./ai/layoutEfficiency";
 import { normalizeRoomType } from "@shared/roomTypes";
 import { pxToM } from "@shared/units";
 
@@ -79,100 +80,9 @@ async function calculateEfficiencyScore(
   layoutConfig?: KnowledgePoweredLayout
 ): Promise<number> {
   if (rooms.length === 0) return 0;
-
-  const layout = layoutConfig || await getKnowledgePoweredLayout();
-
-  const roomsByType = new Map<string, Room[]>();
-  rooms.forEach(room => {
-    const normalizedType = normalizeRoomType(room.type);
-    if (!roomsByType.has(normalizedType)) {
-      roomsByType.set(normalizedType, []);
-    }
-    roomsByType.get(normalizedType)!.push(room);
-  });
-
-  let score = 50;
-
-  const reception = roomsByType.get("reception")?.[0];
-  const waiting = roomsByType.get("waiting")?.[0];
-  const examRooms = roomsByType.get("exam") || [];
-  const lab = roomsByType.get("lab")?.[0];
-  const office = roomsByType.get("office")?.[0];
-
-  if (reception && waiting) {
-    const recCenter = getRoomCenter(reception);
-    const waitCenter = getRoomCenter(waiting);
-    const distanceM = calculateDistanceM(recCenter.x, recCenter.y, waitCenter.x, waitCenter.y);
-    
-    const benchmark = layout.distanceGuidelines.receptionToWaiting;
-    if (distanceM <= benchmark.optimal) {
-      score += 12;
-    } else if (distanceM <= benchmark.maxMeters) {
-      score += 8;
-    } else {
-      score -= 5;
-    }
-  }
-
-  if (waiting && examRooms.length > 0) {
-    const waitCenter = getRoomCenter(waiting);
-    const avgDistanceM = examRooms.reduce((sum, exam) => {
-      const examCenter = getRoomCenter(exam);
-      return sum + calculateDistanceM(waitCenter.x, waitCenter.y, examCenter.x, examCenter.y);
-    }, 0) / examRooms.length;
-    
-    const benchmark = layout.distanceGuidelines.waitingToExam;
-    
-    if (avgDistanceM <= benchmark.optimal) {
-      score += 15;
-    } else if (avgDistanceM <= benchmark.maxMeters) {
-      score += 8;
-    } else {
-      score -= 5;
-    }
-  }
-
-  examRooms.forEach(exam => {
-    const evaluation = evaluateRoomSizeM("exam", exam.width, exam.height);
-    if (evaluation.assessment === "optimal") {
-      score += 3;
-    } else if (evaluation.assessment === "undersized") {
-      score -= 2;
-    }
-  });
-
-  if (lab && examRooms.length > 0) {
-    const labCenter = getRoomCenter(lab);
-    const avgDistanceM = examRooms.reduce((sum, exam) => {
-      const examCenter = getRoomCenter(exam);
-      return sum + calculateDistanceM(labCenter.x, labCenter.y, examCenter.x, examCenter.y);
-    }, 0) / examRooms.length;
-    
-    const benchmark = layout.distanceGuidelines.examToLab;
-    
-    if (avgDistanceM <= benchmark.optimal) {
-      score += 10;
-    } else if (avgDistanceM <= benchmark.maxMeters) {
-      score += 5;
-    } else {
-      score -= 3;
-    }
-  }
-
-  if (office && reception) {
-    const officeCenter = getRoomCenter(office);
-    const recCenter = getRoomCenter(reception);
-    const distanceM = calculateDistanceM(officeCenter.x, officeCenter.y, recCenter.x, recCenter.y);
-    
-    if (distanceM < 6) score += 5;
-    else if (distanceM < 10) score += 3;
-  }
-
-  if (!reception) score -= 15;
-  if (!waiting) score -= 10;
-  if (examRooms.length === 0) score -= 20;
-
-  return Math.max(0, Math.min(100, score));
+  
+  const flowResult = computeLayoutEfficiency(rooms);
+  return flowResult.score;
 }
 
 function calculateHarmonyScore(staff: Staff[], rooms: Room[]): number {

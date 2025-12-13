@@ -93,6 +93,14 @@ export const api = {
       }),
   },
 
+  layout: {
+    efficiency: (practiceId: string) =>
+      fetchAPI<LayoutEfficiencyResult>("/api/layout/efficiency", {
+        method: "POST",
+        body: JSON.stringify({ practiceId }),
+      }),
+  },
+
   knowledge: {
     list: () => fetchAPI<KnowledgeSource[]>("/api/knowledge"),
     get: (id: string) => fetchAPI<{ source: KnowledgeSource; chunks: KnowledgeChunk[] }>(`/api/knowledge/${id}`),
@@ -139,4 +147,26 @@ export interface CapacityAnalysis {
   estimatedCapacity: number;
   capacityScore: number;
   benchmarkComparison: string;
+}
+
+export interface LayoutEfficiencyResult {
+  score: number;
+  breakdown: {
+    patientFlowMeters: number;
+    staffMotionMeters: number;
+    steriLoopMeters: number;
+    labLoopMeters: number;
+    crossFloorPenaltyMeters: number;
+    privacyRisk: boolean;
+  };
+  issues: Array<{
+    severity: "critical" | "high" | "medium" | "low";
+    code: string;
+    title: string;
+    detail: string;
+    current: number;
+    target?: number;
+    unit: string;
+  }>;
+  tips: string[];
 }

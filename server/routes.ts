@@ -8,6 +8,7 @@ import {
   insertSimulationSchema,
 } from "@shared/schema";
 import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
+import { computeLayoutEfficiency } from "./ai/layoutEfficiency";
 import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
 import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
@@ -90,6 +91,21 @@ export async function registerRoutes(
       res.json(breakdown);
     } catch (error) {
       res.status(500).json({ error: "Failed to calculate layout efficiency" });
+    }
+  });
+
+  app.post("/api/layout/efficiency", async (req, res) => {
+    try {
+      const { practiceId } = req.body;
+      if (!practiceId || typeof practiceId !== "string") {
+        return res.status(400).json({ error: "practiceId is required" });
+      }
+      const rooms = await storage.getRoomsByPracticeId(practiceId);
+      const result = computeLayoutEfficiency(rooms);
+      res.json(result);
+    } catch (error) {
+      console.error("Layout efficiency error:", error);
+      res.status(500).json({ error: "Failed to compute layout efficiency" });
     }
   });
 
