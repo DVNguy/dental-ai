@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export default function LayoutEditor() {
   const { practiceId } = usePractice();
   const queryClient = useQueryClient();
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [currentFloor, setCurrentFloor] = useState<number>(0);
   
   const [roomNameDraft, setRoomNameDraft] = useState("");
   const [widthDraft, setWidthDraft] = useState<number>(2);
@@ -73,8 +75,15 @@ export default function LayoutEditor() {
   }, [queryClient, practiceId]);
 
   const createRoomMutation = useMutation({
-    mutationFn: (data: { type: string; name: string; x: number; y: number; width: number; height: number }) =>
-      api.rooms.create(practiceId!, { ...data, practiceId: practiceId! }),
+    mutationFn: (data: { type: string; name: string; x: number; y: number; width: number; height: number; floor: number }) =>
+      api.rooms.create(practiceId!, { 
+        ...data, 
+        practiceId: practiceId!,
+        x: Math.round(mToPx(data.x)),
+        y: Math.round(mToPx(data.y)),
+        width: Math.round(mToPx(data.width)),
+        height: Math.round(mToPx(data.height)),
+      }),
     onSuccess: (newRoom) => {
       queryClient.invalidateQueries({ queryKey: ["rooms", practiceId] });
       scheduleAIInvalidation();
@@ -83,8 +92,14 @@ export default function LayoutEditor() {
   });
 
   const updateRoomMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Room> }) =>
-      api.rooms.update(id, updates),
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Room> }) => {
+      const apiUpdates: Partial<Room> = { ...updates };
+      if (apiUpdates.x !== undefined) apiUpdates.x = Math.round(mToPx(apiUpdates.x));
+      if (apiUpdates.y !== undefined) apiUpdates.y = Math.round(mToPx(apiUpdates.y));
+      if (apiUpdates.width !== undefined) apiUpdates.width = Math.round(mToPx(apiUpdates.width));
+      if (apiUpdates.height !== undefined) apiUpdates.height = Math.round(mToPx(apiUpdates.height));
+      return api.rooms.update(id, apiUpdates);
+    },
     onMutate: async ({ id, updates }) => {
       await queryClient.cancelQueries({ queryKey: ["rooms", practiceId] });
       const previous = queryClient.getQueryData<Room[]>(["rooms", practiceId]);
@@ -239,7 +254,8 @@ export default function LayoutEditor() {
       x: 2,
       y: 2,
       width: typeDef.w,
-      height: typeDef.h
+      height: typeDef.h,
+      floor: currentFloor
     });
   };
 
@@ -296,7 +312,39 @@ export default function LayoutEditor() {
           <p className="text-sm text-muted-foreground">{t("layout.subtitle")}</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
+            <Button
+              variant={currentFloor === -1 ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setCurrentFloor(-1)}
+              className="h-8 px-3"
+              data-testid="button-floor-ug"
+            >
+              <Building2 className="mr-1.5 h-3 w-3" />
+              {t("editor.floorUG")}
+            </Button>
+            <Button
+              variant={currentFloor === 0 ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setCurrentFloor(0)}
+              className="h-8 px-3"
+              data-testid="button-floor-eg"
+            >
+              <Building2 className="mr-1.5 h-3 w-3" />
+              {t("editor.floorEG")}
+            </Button>
+            <Button
+              variant={currentFloor === 1 ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setCurrentFloor(1)}
+              className="h-8 px-3"
+              data-testid="button-floor-og"
+            >
+              <Building2 className="mr-1.5 h-3 w-3" />
+              {t("editor.floorOG")}
+            </Button>
+          </div>
           <Button 
             variant="outline" 
             size="sm" 
@@ -365,7 +413,7 @@ export default function LayoutEditor() {
           />
           
           <AnimatePresence>
-            {rooms.map((room) => {
+            {rooms.filter(r => r.floor === currentFloor).map((room) => {
               const typeDef = ROOM_TYPES.find(t => t.id === room.type);
               const isSelected = selectedRoomId === room.id;
               
@@ -512,6 +560,23 @@ export default function LayoutEditor() {
                       <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-bold" data-testid="text-room-area">
                         {sqM(widthDraft, heightDraft)} m²
                       </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2">
+                      <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.floor")}</Label>
+                      <Select
+                        value={String(selectedRoom.floor)}
+                        onValueChange={(val) => updateRoom(selectedRoom.id, { floor: parseInt(val, 10) })}
+                      >
+                        <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-floor">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="-1">{t("editor.floorUG")}</SelectItem>
+                          <SelectItem value="0">{t("editor.floorEG")}</SelectItem>
+                          <SelectItem value="1">{t("editor.floorOG")}</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
