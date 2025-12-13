@@ -329,7 +329,7 @@ const resources = {
 
       "rooms.reception": "Empfang",
       "rooms.waiting": "Wartezimmer",
-      "rooms.exam": "Sprechzimmer",
+      "rooms.exam": "Behandlung",
       "rooms.lab": "Labor",
       "rooms.office": "Arztzimmer",
       "rooms.sterilization": "Sterilisation",
