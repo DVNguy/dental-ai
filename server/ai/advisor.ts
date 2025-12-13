@@ -25,6 +25,82 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
 });
 
+/**
+ * Strips internal KB citation metadata from recommendation text.
+ * Removes:
+ * - Bracketed citations: [KB-Quelle: ...], [Quelle X]
+ * - Parenthetical citations: (Quelle 1), (Band 6.1, „QM...")
+ * - Quoted KB titles: *"Document Title"*, „Document Title"
+ * - Source attribution phrases: Laut Coach-Wissen, gemäß Coach-Wissen, basierend auf
+ * - Trailing "gemäß ..." with breadcrumb paths containing ">"
+ * - Knowledge base file paths and heading structures
+ * - Markdown formatting: **bold**, *italic*
+ */
+function cleanRecommendationText(text: string): string {
+  let cleaned = text;
+  
+  // STEP 1: Remove complete attribution phrases BEFORE stripping markdown
+  // This preserves the structure so patterns like "basierend auf *Title*" match correctly
+  
+  // Remove "basierend auf *..." patterns with any content including titles
+  cleaned = cleaned.replace(/\s*basierend auf\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
+  
+  // Remove "gemäß *..." patterns with any content
+  cleaned = cleaned.replace(/\s*gemäß\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
+  
+  // Remove "laut *..." patterns with any content  
+  cleaned = cleaned.replace(/\s*laut\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
+  
+  // Remove "gemäß <breadcrumb path>" patterns (paths with > separators)
+  cleaned = cleaned.replace(/\s*gemäß\s+[^.,!?]*>\s*[^.,!?]+/gi, '');
+  
+  // Remove "basierend auf <breadcrumb path>" patterns
+  cleaned = cleaned.replace(/\s*basierend auf\s+[^.,!?]*>\s*[^.,!?]+/gi, '');
+  
+  // STEP 2: Remove bracketed and parenthetical citations
+  cleaned = cleaned.replace(/\s*\[[^\]]*\]/g, '');
+  cleaned = cleaned.replace(/\s*\([^)]*(?:Quelle|Band|Kapitel)[^)]*\)/gi, '');
+  
+  // STEP 3: Remove "Laut/Gemäß/Nach Coach-Wissen" attribution phrases with all variants
+  // Pattern includes Band/Kapitel descriptors: "Laut Coach-Wissen Band 2 Kapitel 3: ..."
+  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s*[,:]\s*/gi, '');
+  // Handle without punctuation: "Laut Coach-Wissen Band 2 sollten" -> "sollten"
+  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s+/gi, '');
+  // Handle sentence-ending: "Basierend auf Coach-Wissen." -> ""
+  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s*\.?\s*$/gi, '');
+  
+  // Remove standalone Band/Kapitel references that may have leaked
+  cleaned = cleaned.replace(/\s*Band\s+[\d.,]+\s*(?:Kapitel\s+[\d.,]+)?\s*[,:.]?\s*/gi, ' ');
+  
+  // STEP 4: Now remove markdown and quoted titles
+  cleaned = cleaned.replace(/\*+["„][^""]*[""]\*+/g, '');
+  cleaned = cleaned.replace(/„[^"]*(?:Praxis|Coach|Training|Algorithmen|Führung|Architektur|Workflow|Prozess|QM|Zahnarzt|Patientenaufnahme|Übersicht|Checkliste)[^"]*"/gi, '');
+  cleaned = cleaned.replace(/["„][A-Z][^""]*(?:Praxis|Coach|Training|Algorithmen|Führung|Architektur|Workflow|Prozess)[^""]*[""](?:\s*\(Quelle[^)]*\))?/gi, '');
+  
+  // STEP 5: Remove any remaining orphaned attribution words
+  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s+\./gi, '.');
+  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s*$/gi, '');
+  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s+,/gi, ',');
+  
+  // STEP 6: Remove markdown bold/italic markers
+  cleaned = cleaned.replace(/\*+/g, '');
+  
+  // STEP 7: Clean up punctuation and spacing
+  cleaned = cleaned.replace(/,\s*\./g, '.');
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  cleaned = cleaned.replace(/\.{2,}/g, '.');
+  cleaned = cleaned.replace(/\s+\./g, '.');
+  cleaned = cleaned.replace(/\.\s*,/g, '.');
+  cleaned = cleaned.trim();
+  
+  // Ensure sentence ends properly
+  if (cleaned.length > 0 && !cleaned.match(/[.!?]$/)) {
+    cleaned += '.';
+  }
+  
+  return cleaned;
+}
+
 export interface LayoutAnalysis {
   overallScore: number;
   efficiencyScore: number;
@@ -249,7 +325,9 @@ WICHTIG: Nutze das Coach-Wissen als primäre Grundlage für deine Empfehlungen. 
 2. Wie ihr Setup im Vergleich zu erfolgreichen Praxen abschneidet
 3. Ein konkreter, umsetzbarer Tipp aus der Praxis
 
-Wenn Coach-Wissen verfügbar ist, zitiere die Quelle kurz. Halte die Antwort unter 120 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
+KEINE QUELLENANGABEN: Zitiere KEINE Dokumenttitel, Kapitelnummern, Bandnummern oder Quellennachweise. Schreibe nur den reinen Empfehlungstext ohne Verweise wie "(Quelle X)", "gemäß Dokument Y", oder "laut Coach-Wissen Band Z".
+
+Halte die Antwort unter 120 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -327,13 +405,22 @@ export async function analyzeLayout(
     (safeCapacityScore * 0.15)
   );
 
-  const aiInsights = await generateAIInsights(
+  const rawAiInsights = await generateAIInsights(
     rooms,
     staff,
     efficiencyScore,
     staffingAnalysis.overallScore,
     recommendations.slice(0, 5)
   );
+  
+  // Clean AI insights to remove any KB citation metadata
+  const aiInsights = cleanRecommendationText(rawAiInsights);
+
+  // Clean all recommendations to remove internal KB metadata
+  const cleanedRecommendations = recommendations
+    .slice(0, 10)
+    .map(cleanRecommendationText)
+    .filter(r => r.length > 5); // Remove empty or too-short recommendations
 
   return {
     overallScore,
@@ -343,7 +430,7 @@ export async function analyzeLayout(
     roomAnalyses,
     staffingAnalysis,
     capacityAnalysis,
-    recommendations: recommendations.slice(0, 10),
+    recommendations: cleanedRecommendations,
     aiInsights
   };
 }
@@ -399,7 +486,9 @@ DEUTSCHE STANDARDS (Ergänzend):
 
 ${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis basierend auf deinem Coach-Wissen."}
 
-WICHTIG: Das Coach-Wissen ist deine primäre Wissensbasis. Nutze es aktiv für alle Empfehlungen. Wenn Coach-Wissen vorhanden ist, zitiere die relevante Quelle kurz.
+WICHTIG: Das Coach-Wissen ist deine primäre Wissensbasis. Nutze es aktiv für alle Empfehlungen.
+
+KEINE QUELLENANGABEN: Zitiere KEINE Dokumenttitel, Kapitelnummern, Bandnummern oder Quellennachweise. Schreibe nur den reinen Empfehlungstext ohne Verweise wie "(Quelle X)", "gemäß Dokument Y", oder "laut Coach-Wissen Band Z".
 
 Halte die Antwort unter 100 Wörtern, spezifisch und umsetzbar. Antworte auf Deutsch.`;
 
@@ -410,7 +499,8 @@ Halte die Antwort unter 100 Wörtern, spezifisch und umsetzbar. Antworte auf Deu
       max_tokens: 300
     });
 
-    return response.choices[0]?.message?.content || "Empfehlung konnte nicht generiert werden.";
+    const rawResponse = response.choices[0]?.message?.content || "Empfehlung konnte nicht generiert werden.";
+    return cleanRecommendationText(rawResponse);
   } catch (error) {
     console.error("OpenAI API error:", error);
     return "KI-Empfehlungen sind vorübergehend nicht verfügbar. Bitte prüfen Sie Ihr Layout gegen die deutschen Standards.";
