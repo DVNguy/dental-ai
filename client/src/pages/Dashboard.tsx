@@ -193,10 +193,14 @@ export default function Dashboard() {
 
   const getPriorityRecommendations = () => {
     if (!analysis?.recommendations) return [];
-    return analysis.recommendations.slice(0, 3).map((rec, i) => ({
-      text: rec,
-      priority: i === 0 ? "high" as const : i === 1 ? "medium" as const : "low" as const
-    }));
+    return analysis.recommendations.slice(0, 3).map((rec, i) => {
+      const cleanText = rec.split('[')[0].trim();
+      const truncated = cleanText.length > 150 ? cleanText.slice(0, 150) + '...' : cleanText;
+      return {
+        text: truncated,
+        priority: i === 0 ? "high" as const : i === 1 ? "medium" as const : "low" as const
+      };
+    });
   };
 
   return (
