@@ -87,27 +87,27 @@ function RatioCard({
       )}
       data-testid={`ratio-card-${role.toLowerCase().replace(/\s+/g, '-')}`}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
           {isOptimal ? (
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
           ) : needsAttention ? (
-            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
           ) : (
-            <Lightbulb className="h-4 w-4 text-yellow-600" />
+            <Lightbulb className="h-4 w-4 text-yellow-600 shrink-0" />
           )}
-          <span className="font-semibold text-sm capitalize">{role}</span>
+          <span className="font-semibold text-xs capitalize truncate">{role}</span>
         </div>
         <Badge 
           variant="secondary" 
           className={cn(
-            "text-xs",
+            "text-[10px] px-1.5 py-0.5 shrink-0",
             isOptimal ? "bg-green-100 text-green-700" :
             needsAttention ? "bg-red-100 text-red-700" :
             "bg-yellow-100 text-yellow-700"
           )}
         >
-          {score}% {t("staff.match")}
+          {score}%
         </Badge>
       </div>
       
