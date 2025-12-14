@@ -7,6 +7,7 @@ import LayoutEditor from "@/pages/LayoutEditor";
 import Staff from "@/pages/Staff";
 import Simulation from "@/pages/Simulation";
 import Knowledge from "@/pages/Knowledge";
+import Playbooks from "@/pages/Playbooks";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/staff" component={Staff} />
         <Route path="/simulation" component={Simulation} />
         <Route path="/knowledge" component={Knowledge} />
+        <Route path="/playbooks" component={Playbooks} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, PenTool, Users, PlayCircle, Brain, Menu, X, Activity, Settings } from "lucide-react";
+import { LayoutDashboard, PenTool, Users, PlayCircle, Brain, Menu, X, Activity, Settings, BookOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageToggle } from "./LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export function MobileNav() {
     { icon: Users, label: t("nav.staff"), href: "/staff" },
     { icon: PlayCircle, label: t("nav.simulation"), href: "/simulation" },
     { icon: Brain, label: t("nav.knowledge", "Coach-Wissen"), href: "/knowledge" },
+    { icon: BookOpen, label: t("nav.playbooks", "Playbooks"), href: "/playbooks" },
   ];
 
   return (

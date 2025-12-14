@@ -22,6 +22,7 @@ import {
   getKnowledgePoweredScheduling,
   getHealthScoreDrivers,
 } from "./ai/artifactBenchmarks";
+import { getArtifacts } from "./ai/artifactService";
 import { z } from "zod";
 
 // ... deine existierenden Imports (Express, http, storage, schema, etc.) ...
@@ -494,6 +495,30 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Failed to fetch benchmarks:", error);
       res.status(500).json({ error: "Failed to fetch benchmarks" });
+    }
+  });
+
+  app.get("/api/playbooks", async (req, res) => {
+    try {
+      const playbooks = await getArtifacts({ artifactType: "playbook" });
+      res.json(playbooks);
+    } catch (error) {
+      console.error("Error fetching playbooks:", error);
+      res.status(500).json({ error: "Failed to fetch playbooks" });
+    }
+  });
+
+  app.get("/api/playbooks/:id", async (req, res) => {
+    try {
+      const playbooks = await getArtifacts({ artifactType: "playbook" });
+      const playbook = playbooks.find(p => p.id === req.params.id);
+      if (!playbook) {
+        return res.status(404).json({ error: "Playbook not found" });
+      }
+      res.json(playbook);
+    } catch (error) {
+      console.error("Error fetching playbook:", error);
+      res.status(500).json({ error: "Failed to fetch playbook" });
     }
   });
 
