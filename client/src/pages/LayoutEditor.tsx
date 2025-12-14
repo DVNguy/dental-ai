@@ -4,8 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints, MoreHorizontal, Layers } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints, MoreHorizontal, Layers, Activity, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +17,7 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { Room, Workflow, WorkflowStep } from "@shared/schema";
-import type { LayoutEfficiencyResult } from "@/lib/api";
+import type { LayoutEfficiencyResult, WorkflowEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 import { METERS_PER_TILE, classifyRoomSize, roomSizeBucketLabel, roomSizeBucketColor } from "@shared/layoutUnits";
 
@@ -102,8 +103,11 @@ export default function LayoutEditor() {
   const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [showEdgePanel, setShowEdgePanel] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [highlightedStepIds, setHighlightedStepIds] = useState<Set<string>>(new Set());
   
   const canvasRef = useRef<HTMLDivElement>(null);
+  const analysisDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const aiInvalidateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const nameDebounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const widthDebounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -170,6 +174,33 @@ export default function LayoutEditor() {
     queryFn: () => api.workflowSteps.list(selectedWorkflowId!),
     enabled: !!selectedWorkflowId,
   });
+
+  const { data: workflowAnalysis, isLoading: isAnalysisLoading, refetch: refetchAnalysis } = useQuery<WorkflowEfficiencyResult>({
+    queryKey: ["workflow-analysis", practiceId],
+    queryFn: () => api.ai.analyzeWorkflows({ practiceId: practiceId!, includeRAG: false }),
+    enabled: false,
+    staleTime: 30000,
+  });
+
+  const triggerAnalysis = useCallback(() => {
+    clearTimeout(analysisDebounceRef.current);
+    analysisDebounceRef.current = setTimeout(() => {
+      refetchAnalysis();
+      setShowAnalysisModal(true);
+    }, 300);
+  }, [refetchAnalysis]);
+
+  useEffect(() => {
+    if (workflowAnalysis?.workflows) {
+      const expensiveIds = new Set<string>();
+      for (const wf of workflowAnalysis.workflows) {
+        for (const step of wf.top3ExpensiveSteps) {
+          expensiveIds.add(step.stepId);
+        }
+      }
+      setHighlightedStepIds(expensiveIds);
+    }
+  }, [workflowAnalysis]);
 
   const createWorkflowMutation = useMutation({
     mutationFn: (data: { name: string; actorType: "patient" | "staff" | "instruments" }) =>
@@ -637,6 +668,22 @@ export default function LayoutEditor() {
           >
             <Link2 className="h-4 w-4 mr-1.5" />
             {connectMode ? t("editor.connectModeActive", "Aktiv") : t("editor.connectMode", "Verbinden")}
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={triggerAnalysis}
+            disabled={isAnalysisLoading || workflowSteps.length === 0}
+            className="h-8 px-3"
+            data-testid="button-workflow-analysis"
+          >
+            {isAnalysisLoading ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Activity className="h-4 w-4 mr-1.5" />
+            )}
+            {t("editor.workflowAnalysis", "Workflow Analyse")}
           </Button>
           
           <DropdownMenu>
@@ -1215,6 +1262,131 @@ export default function LayoutEditor() {
           )}
         </AnimatePresence>
       </div>
+
+      <Dialog open={showAnalysisModal} onOpenChange={setShowAnalysisModal}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" data-testid="dialog-workflow-analysis">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              {t("editor.workflowAnalysisTitle", "Workflow-Analyse")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("editor.workflowAnalysisDesc", "Effizienz-Score basierend auf Laufwegen und Prozessabläufen")}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isAnalysisLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : workflowAnalysis ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Gesamt-Score</div>
+                  <div className={cn(
+                    "text-3xl font-bold",
+                    workflowAnalysis.overallScore >= 70 ? "text-green-600" : 
+                    workflowAnalysis.overallScore >= 40 ? "text-amber-600" : "text-red-600"
+                  )} data-testid="text-overall-score">
+                    {workflowAnalysis.overallScore}/100
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-medium text-muted-foreground">Friction-Index</div>
+                  <div className="text-xl font-semibold" data-testid="text-friction-index">
+                    {workflowAnalysis.overallFrictionIndex}%
+                  </div>
+                </div>
+              </div>
+
+              {workflowAnalysis.workflows.map((wf) => (
+                <div key={wf.workflowId} className="border rounded-lg p-3" data-testid={`workflow-${wf.workflowId}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-sm">{wf.workflowName}</span>
+                    <span className={cn(
+                      "text-sm font-bold",
+                      wf.score >= 70 ? "text-green-600" : wf.score >= 40 ? "text-amber-600" : "text-red-600"
+                    )}>
+                      {wf.score}/100
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground mb-2">
+                    <div>Gesamtweg: <span className="font-medium text-foreground">{wf.totalDistanceM}m</span></div>
+                    <div>Etagenwechsel: <span className="font-medium text-foreground">{wf.floorChangeCount}</span></div>
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500 mt-1" />{wf.distanceBandCounts.short}
+                      <span className="w-2 h-2 rounded-full bg-amber-500 mt-1 ml-1" />{wf.distanceBandCounts.medium}
+                      <span className="w-2 h-2 rounded-full bg-red-500 mt-1 ml-1" />{wf.distanceBandCounts.long}
+                    </div>
+                  </div>
+                  
+                  {wf.top3ExpensiveSteps.length > 0 && (
+                    <div className="space-y-1 mt-2 pt-2 border-t">
+                      <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        Teuerste Schritte:
+                      </div>
+                      {wf.top3ExpensiveSteps.map((step, i) => (
+                        <div 
+                          key={step.stepId} 
+                          className={cn(
+                            "text-xs px-2 py-1 rounded flex items-center justify-between",
+                            step.distanceBand === "long" ? "bg-red-50 text-red-700" :
+                            step.distanceBand === "medium" ? "bg-amber-50 text-amber-700" :
+                            "bg-green-50 text-green-700"
+                          )}
+                          data-testid={`expensive-step-${i}`}
+                        >
+                          <span>{step.fromRoomName} → {step.toRoomName}</span>
+                          <span className="font-medium">{step.distanceM}m</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {workflowAnalysis.recommendations.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <Lightbulb className="h-4 w-4 text-amber-500" />
+                    Empfehlungen
+                  </div>
+                  {workflowAnalysis.recommendations.slice(0, 3).map((rec) => (
+                    <div 
+                      key={rec.id} 
+                      className={cn(
+                        "p-3 rounded-lg border text-sm",
+                        rec.priority === "high" ? "bg-red-50 border-red-200" :
+                        rec.priority === "medium" ? "bg-amber-50 border-amber-200" :
+                        "bg-blue-50 border-blue-200"
+                      )}
+                      data-testid={`recommendation-${rec.id}`}
+                    >
+                      <div className="font-medium flex items-center gap-2">
+                        {rec.priority === "high" ? (
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                        ) : rec.priority === "medium" ? (
+                          <Info className="h-4 w-4 text-amber-500" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 text-blue-500" />
+                        )}
+                        {rec.title}
+                      </div>
+                      <p className="text-muted-foreground mt-1">{rec.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Keine Analyse-Daten verfügbar
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

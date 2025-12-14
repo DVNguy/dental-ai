@@ -741,5 +741,69 @@ export async function registerRoutes(
     }
   });
 
+  const analyzeWorkflowsSchema = z.object({
+    practiceId: z.string(),
+    includeRAG: z.boolean().optional().default(false),
+  });
+
+  app.post("/api/ai/analyze-workflows", async (req, res) => {
+    try {
+      const { practiceId, includeRAG } = analyzeWorkflowsSchema.parse(req.body);
+      
+      const practice = await storage.getPractice(practiceId);
+      if (!practice) {
+        return res.status(404).json({ error: "Practice not found" });
+      }
+      
+      const rooms = await storage.getRoomsByPracticeId(practiceId);
+      const workflows = await storage.getWorkflowsByPracticeId(practiceId);
+      
+      const workflowStepsMap = new Map<string, any[]>();
+      for (const workflow of workflows) {
+        const steps = await storage.getWorkflowSteps(workflow.id);
+        workflowStepsMap.set(workflow.id, steps);
+      }
+      
+      const { analyzeWorkflows } = await import("./ai/workflowEfficiency");
+      const analysis = await analyzeWorkflows(
+        practiceId,
+        rooms,
+        workflows,
+        workflowStepsMap,
+        practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER
+      );
+      
+      if (includeRAG && analysis.recommendations.length > 0) {
+        try {
+          const metricsContext = analysis.workflows.map(w => 
+            `Workflow "${w.workflowName}": ${w.totalDistanceM}m Gesamtweg, Score ${w.score}/100, ${w.floorChangeCount} Etagenwechsel`
+          ).join(". ");
+          
+          const ragQuestion = `Gib 3 konkrete Optimierungen für Praxisabläufe ohne Umbau. Kontext: ${metricsContext}. Fokus auf Prozessoptimierung, digitale Lösungen und Materialorganisation.`;
+          
+          const ragResult = await queryRAG(ragQuestion, 3);
+          
+          (analysis as any).knowledgeInsight = {
+            answer: ragResult.answer,
+            sources: ragResult.kbChunks.map(c => ({
+              docName: c.docName.replace(/\.docx$/i, ""),
+              headingPath: c.headingPath || "Allgemein",
+            })),
+          };
+        } catch (ragError) {
+          console.error("RAG enhancement failed:", ragError);
+        }
+      }
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error("Workflow analysis error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request parameters" });
+      }
+      res.status(500).json({ error: "Failed to analyze workflows" });
+    }
+  });
+
   return httpServer;
 }

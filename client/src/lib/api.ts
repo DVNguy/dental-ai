@@ -91,6 +91,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    analyzeWorkflows: (data: { practiceId: string; includeRAG?: boolean }) =>
+      fetchAPI<WorkflowEfficiencyResult>("/api/ai/analyze-workflows", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   layout: {
@@ -235,4 +240,54 @@ export interface LayoutEfficiencyResult {
   tips: string[];
   workflowMetrics?: WorkflowMetrics;
   workflowAnalysis?: WorkflowAnalysis;
+}
+
+export interface StepAnalysis {
+  stepIndex: number;
+  stepId: string;
+  fromRoomId: string;
+  toRoomId: string;
+  fromRoomName: string;
+  toRoomName: string;
+  distanceM: number;
+  distanceBand: "short" | "medium" | "long";
+  isFloorChange: boolean;
+  frictionScore: number;
+}
+
+export interface WorkflowAnalysisDetail {
+  workflowId: string;
+  workflowName: string;
+  actorType: string;
+  totalDistanceM: number;
+  distanceBandCounts: {
+    short: number;
+    medium: number;
+    long: number;
+  };
+  floorChangeCount: number;
+  frictionIndex: number;
+  score: number;
+  top3ExpensiveSteps: StepAnalysis[];
+  allSteps: StepAnalysis[];
+}
+
+export interface WorkflowRecommendation {
+  id: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  category: "backtracking" | "distance" | "floor" | "process" | "digital";
+}
+
+export interface WorkflowEfficiencyResult {
+  practiceId: string;
+  workflows: WorkflowAnalysisDetail[];
+  overallScore: number;
+  overallFrictionIndex: number;
+  recommendations: WorkflowRecommendation[];
+  knowledgeInsight?: {
+    answer: string;
+    sources: Array<{ docName: string; headingPath: string }>;
+  };
 }
