@@ -1,0 +1,60 @@
+Implementiere Iteration A aus dem Plan (minimal-invasiv).
+
+Scope Iteration A:
+A1) Maßeinheiten im LayoutEditor:
+- Nur Anzeige/Labels: ersetze überall “px” durch “m” (Praxis-Meter).
+- Definiere PX_PER_M = 40 und Helper:
+  pxToM(px) => round(px / 40, 1)
+  mToPx(m) => round(m * 40)
+  pxRectToSqM(wPx,hPx) => round((wPx*hPx)/1600, 1)
+- Update UI an diesen Stellen:
+  - Room type cards (links): statt “150x100px” -> “3,8×2,5 m”
+  - Selected room badge: statt “120px” -> “3,0 m”
+  - Room label im Canvas bei selected: statt “120 x 120” -> “3,0×3,0 m”
+  - Optional: zeige darunter klein “(120 px)” als sekundäre Info (dezent).
+- Keine Änderung an Speicherung: weiterhin px in DB.
+
+A2) Datenmodell in shared/schema.ts:
+- Neue Tabellen:
+  workflows: id, practiceId FK, name, kind ('patient'|'staff'), createdAt/updatedAt.
+  workflowSteps: id, workflowId FK, stepIndex int, fromRoomId FK, toRoomId FK, weight real default 1.
+- rooms: füge optional floor:int default 0 hinzu.
+- Erzeuge passende insert schemas + Type exports.
+
+A3) DB Migration:
+- Nutze den bestehenden Drizzle-Migrations-Flow (prüfe wie Migrations im Repo gemacht werden).
+- Erzeuge Migration für neue Tabellen + rooms.floor.
+
+A4) server/storage.ts:
+- CRUD minimal:
+  getWorkflowsByPracticeId(practiceId)
+  createWorkflow(practiceId, {name, kind})
+  deleteWorkflow(id)
+  getWorkflowSteps(workflowId)
+  createWorkflowStep(workflowId, {stepIndex, fromRoomId, toRoomId, weight})
+  deleteWorkflowStep(id)
+- Achte auf practice scoping (über workflow.practiceId).
+
+A5) server/routes.ts:
+- Neue Endpoints:
+  GET  /api/practices/:id/workflows
+  POST /api/practices/:id/workflows
+  DELETE /api/workflows/:id
+  GET  /api/workflows/:id/steps
+  POST /api/workflows/:id/steps
+  DELETE /api/workflow-steps/:id
+- Validierung mit zod.
+- Return JSON.
+
+A6) client/src/lib/api.ts:
+- Ergänze api.workflows + api.workflowSteps passend.
+
+Wichtig:
+- Keine UI für Edges in Iteration A (kommt Iteration B).
+- Keine großen Refactors.
+- Nach jeder Änderung: kurz kommentieren “was/warum”.
+
+Manual Tests:
+1) App starten, LayoutEditor öffnen: Maße überall in m angezeigt.
+2) POST workflow via API (oder simple test im code): workflow lässt sich anlegen/listen.
+3) Steps anlegen/listen/löschen: funktioniert.

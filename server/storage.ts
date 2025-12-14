@@ -220,19 +220,24 @@ export class DatabaseStorage implements IStorage {
     return (results.rows as any[]).map(row => ({
       id: row.id,
       sourceId: row.sourceId,
+      headingPath: row.headingPath || null,
       chunkIndex: row.chunkIndex,
       content: row.content,
+      contentHash: row.contentHash || null,
       tokens: row.tokens,
       embedding: null,
       keyPoints: row.keyPoints,
+      createdAt: row.createdAt || new Date(),
       source: {
         id: row.source_id,
         title: row.source_title,
         fileName: row.source_fileName,
+        fileHash: row.source_fileHash || null,
         category: row.source_category,
         tags: row.source_tags,
         description: row.source_description,
-        uploadedAt: row.source_uploadedAt
+        uploadedAt: row.source_uploadedAt,
+        updatedAt: row.source_updatedAt || row.source_uploadedAt
       },
       similarity: parseFloat(row.similarity)
     }));
@@ -243,7 +248,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
-    const result = await db.insert(workflows).values(workflow).returning();
+    const result = await db.insert(workflows).values(workflow as any).returning();
     return result[0];
   }
 
@@ -256,14 +261,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection> {
-    const result = await db.insert(workflowConnections).values(connection).returning();
+    const result = await db.insert(workflowConnections).values(connection as any).returning();
     return result[0];
   }
 
   async updateConnection(id: string, updates: Partial<Omit<InsertWorkflowConnection, 'practiceId' | 'fromRoomId' | 'toRoomId'>>): Promise<WorkflowConnection | undefined> {
     const result = await db
       .update(workflowConnections)
-      .set(updates)
+      .set(updates as any)
       .where(eq(workflowConnections.id, id))
       .returning();
     return result[0];
