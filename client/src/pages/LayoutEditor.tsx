@@ -258,7 +258,13 @@ export default function LayoutEditor() {
     },
   });
 
+  const lastSeededPracticeId = useRef<string | null>(null);
+  
   useEffect(() => {
+    if (practiceId !== lastSeededPracticeId.current) {
+      hasCreatedDefaultWorkflow.current = false;
+    }
+    
     if (
       practiceId && 
       !isWorkflowsLoading &&
@@ -267,6 +273,7 @@ export default function LayoutEditor() {
       !hasCreatedDefaultWorkflow.current
     ) {
       hasCreatedDefaultWorkflow.current = true;
+      lastSeededPracticeId.current = practiceId;
       createWorkflowMutation.mutate({ name: "Neupatient (Patient Flow)", actorType: "patient" });
     }
   }, [practiceId, workflows.length, isWorkflowsLoading, createWorkflowMutation.isPending]);
