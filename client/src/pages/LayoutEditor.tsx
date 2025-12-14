@@ -21,7 +21,7 @@ import type { LayoutEfficiencyResult, WorkflowEfficiencyResult } from "@/lib/api
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 import { METERS_PER_TILE, classifyRoomSize, roomSizeBucketLabel, roomSizeBucketColor } from "@shared/layoutUnits";
 
-function computeBezierPath(fromRoom: Room, toRoom: Room): { path: string; startX: number; startY: number; endX: number; endY: number } {
+function computeBezierPath(fromRoom: Room, toRoom: Room, offset: number = 0): { path: string; startX: number; startY: number; endX: number; endY: number; arrowPoints: Array<{x: number; y: number; angle: number}> } {
   const fromCenterX = mToPx(fromRoom.x + fromRoom.width / 2);
   const fromCenterY = mToPx(fromRoom.y + fromRoom.height / 2);
   const toCenterX = mToPx(toRoom.x + toRoom.width / 2);
@@ -30,31 +30,74 @@ function computeBezierPath(fromRoom: Room, toRoom: Room): { path: string; startX
   const dx = toCenterX - fromCenterX;
   const dy = toCenterY - fromCenterY;
   
-  let startX: number, startY: number, endX: number, endY: number;
+  let baseStartX: number, baseStartY: number, baseEndX: number, baseEndY: number;
   let c1x: number, c1y: number, c2x: number, c2y: number;
   
   if (Math.abs(dx) >= Math.abs(dy)) {
-    startX = mToPx(fromRoom.x + (dx > 0 ? fromRoom.width : 0));
-    startY = mToPx(fromRoom.y + fromRoom.height / 2);
-    endX = mToPx(toRoom.x + (dx > 0 ? 0 : toRoom.width));
-    endY = mToPx(toRoom.y + toRoom.height / 2);
-    c1x = startX + (endX - startX) * 0.5;
-    c1y = startY;
-    c2x = endX - (endX - startX) * 0.5;
-    c2y = endY;
+    baseStartX = mToPx(fromRoom.x + (dx > 0 ? fromRoom.width : 0));
+    baseStartY = mToPx(fromRoom.y + fromRoom.height / 2);
+    baseEndX = mToPx(toRoom.x + (dx > 0 ? 0 : toRoom.width));
+    baseEndY = mToPx(toRoom.y + toRoom.height / 2);
   } else {
-    startX = mToPx(fromRoom.x + fromRoom.width / 2);
-    startY = mToPx(fromRoom.y + (dy > 0 ? fromRoom.height : 0));
-    endX = mToPx(toRoom.x + toRoom.width / 2);
-    endY = mToPx(toRoom.y + (dy > 0 ? 0 : toRoom.height));
-    c1x = startX;
-    c1y = startY + (endY - startY) * 0.5;
-    c2x = endX;
-    c2y = endY - (endY - startY) * 0.5;
+    baseStartX = mToPx(fromRoom.x + fromRoom.width / 2);
+    baseStartY = mToPx(fromRoom.y + (dy > 0 ? fromRoom.height : 0));
+    baseEndX = mToPx(toRoom.x + toRoom.width / 2);
+    baseEndY = mToPx(toRoom.y + (dy > 0 ? 0 : toRoom.height));
+  }
+  
+  const segDx = baseEndX - baseStartX;
+  const segDy = baseEndY - baseStartY;
+  const segLen = Math.sqrt(segDx * segDx + segDy * segDy) || 1;
+  const perpX = -segDy / segLen;
+  const perpY = segDx / segLen;
+  
+  const startX = baseStartX + perpX * offset;
+  const startY = baseStartY + perpY * offset;
+  const endX = baseEndX + perpX * offset;
+  const endY = baseEndY + perpY * offset;
+  
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const baseC1x = baseStartX + (baseEndX - baseStartX) * 0.5;
+    const baseC1y = baseStartY;
+    const baseC2x = baseEndX - (baseEndX - baseStartX) * 0.5;
+    const baseC2y = baseEndY;
+    c1x = baseC1x + perpX * offset;
+    c1y = baseC1y + perpY * offset;
+    c2x = baseC2x + perpX * offset;
+    c2y = baseC2y + perpY * offset;
+  } else {
+    const baseC1x = baseStartX;
+    const baseC1y = baseStartY + (baseEndY - baseStartY) * 0.5;
+    const baseC2x = baseEndX;
+    const baseC2y = baseEndY - (baseEndY - baseStartY) * 0.5;
+    c1x = baseC1x + perpX * offset;
+    c1y = baseC1y + perpY * offset;
+    c2x = baseC2x + perpX * offset;
+    c2y = baseC2y + perpY * offset;
   }
   
   const path = `M ${startX} ${startY} C ${c1x} ${c1y} ${c2x} ${c2y} ${endX} ${endY}`;
-  return { path, startX, startY, endX, endY };
+  
+  const bezierPoint = (t: number) => {
+    const u = 1 - t;
+    const x = u*u*u*startX + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*endX;
+    const y = u*u*u*startY + 3*u*u*t*c1y + 3*u*t*t*c2y + t*t*t*endY;
+    return { x, y };
+  };
+  
+  const bezierTangent = (t: number) => {
+    const u = 1 - t;
+    const tx = 3*u*u*(c1x - startX) + 6*u*t*(c2x - c1x) + 3*t*t*(endX - c2x);
+    const ty = 3*u*u*(c1y - startY) + 6*u*t*(c2y - c1y) + 3*t*t*(endY - c2y);
+    return Math.atan2(ty, tx) * (180 / Math.PI);
+  };
+  
+  const arrowPoints = [0.5].map(t => ({
+    ...bezierPoint(t),
+    angle: bezierTangent(t)
+  }));
+  
+  return { path, startX, startY, endX, endY, arrowPoints };
 }
 
 function computePreviewPath(fromRoom: Room, mouseX: number, mouseY: number): string {
@@ -568,13 +611,31 @@ export default function LayoutEditor() {
   const connectionArrows = useMemo(() => {
     const floorRooms = rooms.filter(r => r.floor === currentFloor);
     const roomMap = new Map(floorRooms.map(r => [r.id, r]));
+    const validSteps = workflowSteps.filter(step => roomMap.has(step.fromRoomId) && roomMap.has(step.toRoomId));
     
-    return workflowSteps
-      .filter(step => roomMap.has(step.fromRoomId) && roomMap.has(step.toRoomId))
+    const pairSet = new Set(validSteps.map(s => `${s.fromRoomId}|${s.toRoomId}`));
+    const bidirectionalPairs = new Set<string>();
+    for (const step of validSteps) {
+      const reverseKey = `${step.toRoomId}|${step.fromRoomId}`;
+      if (pairSet.has(reverseKey)) {
+        bidirectionalPairs.add(`${step.fromRoomId}|${step.toRoomId}`);
+        bidirectionalPairs.add(reverseKey);
+      }
+    }
+    
+    return validSteps
       .map((step, index) => {
         const fromRoom = roomMap.get(step.fromRoomId)!;
         const toRoom = roomMap.get(step.toRoomId)!;
-        const { path, startX, startY, endX, endY } = computeBezierPath(fromRoom, toRoom);
+        
+        const pairKey = `${step.fromRoomId}|${step.toRoomId}`;
+        const isBidirectional = bidirectionalPairs.has(pairKey);
+        let offset = 0;
+        if (isBidirectional) {
+          offset = step.fromRoomId < step.toRoomId ? 6 : -6;
+        }
+        
+        const { path, startX, startY, endX, endY, arrowPoints } = computeBezierPath(fromRoom, toRoom, offset);
         
         const fromCenterX = fromRoom.x + fromRoom.width / 2;
         const fromCenterY = fromRoom.y + fromRoom.height / 2;
@@ -617,6 +678,7 @@ export default function LayoutEditor() {
           path,
           midX: (startX + endX) / 2,
           midY: (startY + endY) / 2,
+          arrowPoints,
           fromRoomId: step.fromRoomId,
           toRoomId: step.toRoomId,
           fromRoomName: fromRoom.name || ROOM_TYPES.find(t => t.id === fromRoom.type)?.label || fromRoom.type,
@@ -789,7 +851,15 @@ export default function LayoutEditor() {
           onMouseMove={handleCanvasMouseMove}
           onMouseLeave={() => setMousePos(null)}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedRoomId(null);
+            if (e.target === e.currentTarget) {
+              if (connectMode && pendingFromRoomId) {
+                setPendingFromRoomId(null);
+                setMousePos(null);
+                setHoverRoomId(null);
+              } else {
+                setSelectedRoomId(null);
+              }
+            }
           }}
         >
           <div 
@@ -802,6 +872,17 @@ export default function LayoutEditor() {
               backgroundSize: '40px 40px'
             }}
           />
+          
+          {connectMode && pendingFromRoomId && (
+            <div 
+              className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-100 border border-green-300 text-green-800 shadow-lg rounded-lg px-4 py-2 z-50 pointer-events-none flex items-center gap-2"
+              data-testid="hint-cancel-connect"
+            >
+              <span className="text-xs font-medium">{t("editor.selectTarget", "Zielraum wählen")}</span>
+              <span className="text-[10px] bg-green-200 rounded px-1.5 py-0.5 font-mono">ESC</span>
+              <span className="text-[10px] text-green-600">{t("editor.orClickCancel", "oder Klick = Abbrechen")}</span>
+            </div>
+          )}
           
           <div 
             className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm shadow-lg rounded-lg border px-3 py-2 z-40 pointer-events-none"
@@ -1048,6 +1129,15 @@ export default function LayoutEditor() {
                   fill="none"
                   className="transition-all duration-200"
                 />
+                {arrow.arrowPoints.map((pt, i) => (
+                  <polygon
+                    key={i}
+                    points="-4,-3 4,0 -4,3"
+                    fill={arrow.distanceColor}
+                    transform={`translate(${pt.x}, ${pt.y}) rotate(${pt.angle})`}
+                    className="transition-all duration-200"
+                  />
+                ))}
                 {connectMode && (
                   <circle
                     cx={arrow.midX}
