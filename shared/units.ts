@@ -1,5 +1,6 @@
-export const PX_PER_METER = 50;
-export const GRID_M = 0.8;
+export const GRID_PX = 40;
+export const PX_PER_METER = GRID_PX;
+export const GRID_M = 1.0;
 
 export function pxToM(px: number): number {
   return px / PX_PER_METER;

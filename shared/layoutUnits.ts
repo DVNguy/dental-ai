@@ -1,8 +1,8 @@
 export const GRID_SIZE_PX = 40;
-export const METERS_PER_TILE = 0.8;
+export const METERS_PER_TILE = 1.0;
 
 export function pxToTiles(px: number): number {
-  return Math.round(px / GRID_SIZE_PX);
+  return Math.round(px / GRID_SIZE_PX * 10) / 10;
 }
 
 export function tilesToPx(tiles: number): number {
@@ -14,7 +14,7 @@ export function tilesToApproxMeters(tiles: number): number {
 }
 
 export function pxToApproxMeters(px: number): number {
-  return tilesToApproxMeters(pxToTiles(px));
+  return Math.round(px / GRID_SIZE_PX * METERS_PER_TILE * 10) / 10;
 }
 
 export type DistanceBucket = "short" | "medium" | "long";
@@ -38,8 +38,8 @@ export function roomAreaTiles(widthPx: number, heightPx: number): number {
 }
 
 export function roomAreaApproxSqm(widthPx: number, heightPx: number): number {
-  const widthM = tilesToApproxMeters(pxToTiles(widthPx));
-  const heightM = tilesToApproxMeters(pxToTiles(heightPx));
+  const widthM = (widthPx / GRID_SIZE_PX) * METERS_PER_TILE;
+  const heightM = (heightPx / GRID_SIZE_PX) * METERS_PER_TILE;
   return Math.round(widthM * heightM * 10) / 10;
 }
 
@@ -121,5 +121,5 @@ export function distanceInTiles(
   const cx2 = x2 + w2 / 2;
   const cy2 = y2 + h2 / 2;
   const distPx = Math.sqrt(Math.pow(cx2 - cx1, 2) + Math.pow(cy2 - cy1, 2));
-  return pxToTiles(distPx);
+  return Math.round(distPx / GRID_SIZE_PX * 10) / 10;
 }

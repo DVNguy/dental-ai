@@ -597,7 +597,7 @@ export default function LayoutEditor() {
                 </div>
                 <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
                   <span className="text-[11px] font-medium text-foreground/80 leading-tight">{room.label}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0">{room.w}×{room.h}</span>
+                  <span className="text-[9px] text-muted-foreground shrink-0">{room.w.toFixed(1)}×{room.h.toFixed(1)}m</span>
                 </div>
               </button>
             ))}
@@ -781,7 +781,7 @@ export default function LayoutEditor() {
                     )}
                     {isSelected && !connectMode && (
                        <div className="text-[9px] text-slate-500 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">
-                         {room.width.toFixed(1)} x {room.height.toFixed(1)} m
+                         {room.width.toFixed(1)} × {room.height.toFixed(1)} m = {(room.width * room.height).toFixed(1)} m²
                        </div>
                     )}
                     {connectMode && isPendingFrom && (
