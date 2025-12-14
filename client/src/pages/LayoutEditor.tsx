@@ -655,7 +655,7 @@ export default function LayoutEditor() {
                 </div>
                 <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
                   <span className="text-[11px] font-medium text-foreground/80 leading-tight">{room.label}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0">{room.w.toFixed(1)}×{room.h.toFixed(1)}m</span>
+                  <span className="text-[9px] text-muted-foreground shrink-0">{room.w.toFixed(1)}×{room.h.toFixed(1)} vM</span>
                 </div>
               </button>
             ))}
@@ -899,7 +899,7 @@ export default function LayoutEditor() {
                     )}
                     {isSelected && !connectMode && (
                        <div className="text-[9px] text-slate-500 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">
-                         {room.width.toFixed(1)} × {room.height.toFixed(1)} m = {(room.width * room.height).toFixed(1)} m²
+                         {room.width.toFixed(1)} × {room.height.toFixed(1)} vM = {(room.width * room.height).toFixed(1)} vM²
                        </div>
                     )}
                     {connectMode && isPendingFrom && (
@@ -1127,7 +1127,7 @@ export default function LayoutEditor() {
                         <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.width")}</Label>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded" data-testid="text-width-tiles">{Math.round(widthDraft / METERS_PER_TILE)} Tiles</span>
-                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{widthDraft.toFixed(1)} m</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{widthDraft.toFixed(1)} vM</span>
                         </div>
                       </div>
                       <Slider 
@@ -1145,7 +1145,7 @@ export default function LayoutEditor() {
                          <Label className="text-xs font-bold uppercase text-muted-foreground">{t("editor.height")}</Label>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded" data-testid="text-height-tiles">{Math.round(heightDraft / METERS_PER_TILE)} Tiles</span>
-                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{heightDraft.toFixed(1)} m</span>
+                          <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded-md font-bold">~{heightDraft.toFixed(1)} vM</span>
                         </div>
                       </div>
                       <Slider 
@@ -1165,7 +1165,7 @@ export default function LayoutEditor() {
                           {roomSizeBucketLabel(classifyRoomSize(selectedRoom.type, sqM(widthDraft, heightDraft)))}
                         </span>
                         <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-bold" data-testid="text-room-area">
-                          ~{sqM(widthDraft, heightDraft)} m²
+                          ~{sqM(widthDraft, heightDraft)} vM²
                         </span>
                       </div>
                     </div>
