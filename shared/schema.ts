@@ -116,6 +116,16 @@ export const workflowConnections = pgTable("workflow_connections", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const workflowSteps = pgTable("workflow_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workflowId: varchar("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  stepIndex: integer("step_index").notNull(),
+  fromRoomId: varchar("from_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+  toRoomId: varchar("to_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+  weight: real("weight").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -168,6 +178,11 @@ export const updateWorkflowConnectionSchema = insertWorkflowConnectionSchema.par
   toRoomId: true,
 });
 
+export const insertWorkflowStepSchema = createInsertSchema(workflowSteps).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -197,3 +212,6 @@ export type Workflow = typeof workflows.$inferSelect;
 
 export type InsertWorkflowConnection = z.infer<typeof insertWorkflowConnectionSchema>;
 export type WorkflowConnection = typeof workflowConnections.$inferSelect;
+
+export type InsertWorkflowStep = z.infer<typeof insertWorkflowStepSchema>;
+export type WorkflowStep = typeof workflowSteps.$inferSelect;
