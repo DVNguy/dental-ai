@@ -99,21 +99,20 @@ export const workflows = pgTable("workflows", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const FLOW_TYPES = ["patient", "staff", "material", "instruments"] as const;
-export type FlowType = typeof FLOW_TYPES[number];
+export const CONNECTION_KINDS = ["patient", "staff"] as const;
+export type ConnectionKind = typeof CONNECTION_KINDS[number];
 
-export const SCENARIO_TYPES = ["standard", "emergency", "peak", "night"] as const;
-export type ScenarioType = typeof SCENARIO_TYPES[number];
+export const DISTANCE_CLASSES = ["auto", "short", "medium", "long"] as const;
+export type DistanceClass = typeof DISTANCE_CLASSES[number];
 
 export const workflowConnections = pgTable("workflow_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  workflowId: varchar("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
   fromRoomId: varchar("from_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
   toRoomId: varchar("to_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
-  label: text("label"),
+  kind: text("kind").notNull().$type<ConnectionKind>().default("patient"),
   weight: integer("weight").notNull().default(1),
-  flowType: text("flow_type").$type<FlowType>().default("patient"),
-  scenario: text("scenario").$type<ScenarioType>().default("standard"),
+  distanceClass: text("distance_class").notNull().$type<DistanceClass>().default("auto"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -161,6 +160,12 @@ export const insertWorkflowSchema = createInsertSchema(workflows).omit({
 export const insertWorkflowConnectionSchema = createInsertSchema(workflowConnections).omit({
   id: true,
   createdAt: true,
+});
+
+export const updateWorkflowConnectionSchema = insertWorkflowConnectionSchema.partial().omit({
+  practiceId: true,
+  fromRoomId: true,
+  toRoomId: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
