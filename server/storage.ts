@@ -17,6 +17,8 @@ import {
   type InsertWorkflow,
   type WorkflowConnection,
   type InsertWorkflowConnection,
+  type WorkflowStep,
+  type InsertWorkflowStep,
   users,
   practices,
   rooms,
@@ -25,7 +27,8 @@ import {
   knowledgeSources,
   knowledgeChunks,
   workflows,
-  workflowConnections
+  workflowConnections,
+  workflowSteps
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, sql, desc } from "drizzle-orm";
@@ -70,6 +73,11 @@ export interface IStorage {
   createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection>;
   updateConnection(id: string, updates: Partial<Omit<InsertWorkflowConnection, 'practiceId' | 'fromRoomId' | 'toRoomId'>>): Promise<WorkflowConnection | undefined>;
   deleteConnection(id: string): Promise<void>;
+
+  getWorkflowSteps(workflowId: string): Promise<WorkflowStep[]>;
+  createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep>;
+  deleteWorkflowStep(id: string): Promise<void>;
+  getMaxStepIndex(workflowId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -276,6 +284,32 @@ export class DatabaseStorage implements IStorage {
 
   async deleteConnection(id: string): Promise<void> {
     await db.delete(workflowConnections).where(eq(workflowConnections.id, id));
+  }
+
+  async getWorkflowSteps(workflowId: string): Promise<WorkflowStep[]> {
+    return await db
+      .select()
+      .from(workflowSteps)
+      .where(eq(workflowSteps.workflowId, workflowId))
+      .orderBy(workflowSteps.stepIndex);
+  }
+
+  async createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep> {
+    const result = await db.insert(workflowSteps).values(step).returning();
+    return result[0];
+  }
+
+  async deleteWorkflowStep(id: string): Promise<void> {
+    await db.delete(workflowSteps).where(eq(workflowSteps.id, id));
+  }
+
+  async getMaxStepIndex(workflowId: string): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT COALESCE(MAX(step_index), -1) as max_index 
+      FROM workflow_steps 
+      WHERE workflow_id = ${workflowId}
+    `);
+    return Number((result.rows[0] as any)?.max_index ?? -1);
   }
 }
 

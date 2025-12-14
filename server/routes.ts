@@ -8,6 +8,7 @@ import {
   insertSimulationSchema,
   insertWorkflowSchema,
   insertWorkflowConnectionSchema,
+  insertWorkflowStepSchema,
 } from "@shared/schema";
 import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
 import { computeLayoutEfficiency, computeWorkflowMetrics } from "./ai/layoutEfficiency";
@@ -656,6 +657,41 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete workflow" });
+    }
+  });
+
+  // Workflow Steps endpoints (workflow-specific ordered steps)
+  app.get("/api/workflows/:id/steps", async (req, res) => {
+    try {
+      const steps = await storage.getWorkflowSteps(req.params.id);
+      res.json(steps);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch workflow steps" });
+    }
+  });
+
+  app.post("/api/workflows/:id/steps", async (req, res) => {
+    try {
+      const maxIndex = await storage.getMaxStepIndex(req.params.id);
+      const validated = insertWorkflowStepSchema.parse({
+        ...req.body,
+        workflowId: req.params.id,
+        stepIndex: maxIndex + 1,
+      });
+      const step = await storage.createWorkflowStep(validated);
+      res.json(step);
+    } catch (error) {
+      console.error("Failed to create workflow step:", error);
+      res.status(400).json({ error: "Invalid step data" });
+    }
+  });
+
+  app.delete("/api/workflow-steps/:id", async (req, res) => {
+    try {
+      await storage.deleteWorkflowStep(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete workflow step" });
     }
   });
 
