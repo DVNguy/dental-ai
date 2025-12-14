@@ -149,9 +149,9 @@ export default function LayoutEditor() {
   const activeWorkflow = workflows[0];
 
   const { data: connections = [] } = useQuery({
-    queryKey: ["connections", activeWorkflow?.id],
-    queryFn: () => api.connections.list(activeWorkflow!.id),
-    enabled: !!activeWorkflow,
+    queryKey: ["connections", practiceId],
+    queryFn: () => api.connections.listByPractice(practiceId!),
+    enabled: !!practiceId,
   });
 
   const createWorkflowMutation = useMutation({
@@ -163,10 +163,10 @@ export default function LayoutEditor() {
   });
 
   const createConnectionMutation = useMutation({
-    mutationFn: (data: { fromRoomId: string; toRoomId: string }) =>
-      api.connections.create(activeWorkflow!.id, data),
+    mutationFn: (data: { fromRoomId: string; toRoomId: string; kind?: "patient" | "staff" }) =>
+      api.connections.create(practiceId!, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+      queryClient.invalidateQueries({ queryKey: ["connections", practiceId] });
       queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     },
   });
@@ -174,7 +174,7 @@ export default function LayoutEditor() {
   const deleteConnectionMutation = useMutation({
     mutationFn: (id: string) => api.connections.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["connections", activeWorkflow?.id] });
+      queryClient.invalidateQueries({ queryKey: ["connections", practiceId] });
       queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     },
   });

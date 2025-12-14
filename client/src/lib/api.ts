@@ -123,14 +123,13 @@ export const api = {
   },
 
   connections: {
-    list: (workflowId: string) => fetchAPI<WorkflowConnection[]>(`/api/workflows/${workflowId}/connections`),
     listByPractice: (practiceId: string) => fetchAPI<WorkflowConnection[]>(`/api/practices/${practiceId}/workflow-connections`),
-    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; label?: string; weight?: number; flowType?: string; scenario?: string }) =>
-      fetchAPI<WorkflowConnection>(`/api/workflows/${workflowId}/connections`, {
+    create: (practiceId: string, data: { fromRoomId: string; toRoomId: string; kind?: "patient" | "staff"; weight?: number; distanceClass?: "auto" | "short" | "medium" | "long" }) =>
+      fetchAPI<WorkflowConnection>(`/api/practices/${practiceId}/workflow-connections`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: Partial<{ fromRoomId: string; toRoomId: string; label: string; weight: number; flowType: string; scenario: string }>) =>
+    update: (id: string, data: Partial<{ kind: "patient" | "staff"; weight: number; distanceClass: "auto" | "short" | "medium" | "long" }>) =>
       fetchAPI<WorkflowConnection>(`/api/workflow-connections/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),

@@ -105,15 +105,11 @@ export async function registerRoutes(
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const result = computeLayoutEfficiency(rooms);
       
-      const workflows = await storage.getWorkflowsByPracticeId(practiceId);
+      const connections = await storage.getConnectionsByPracticeId(practiceId);
       let workflowMetrics = null;
       let workflowTips: string[] = [];
       
-      if (workflows.length > 0) {
-        const allConnections = await Promise.all(
-          workflows.map((w) => storage.getConnectionsByWorkflowId(w.id))
-        );
-        const connections = allConnections.flat();
+      if (connections.length > 0) {
         workflowMetrics = computeWorkflowMetrics(rooms, connections);
         
         if (workflowMetrics) {
@@ -635,28 +631,7 @@ export async function registerRoutes(
     }
   });
 
-  // Workflow connection endpoints
-  app.get("/api/workflows/:id/connections", async (req, res) => {
-    try {
-      const connections = await storage.getConnectionsByWorkflowId(req.params.id);
-      res.json(connections);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch connections" });
-    }
-  });
-
-  app.post("/api/workflows/:id/connections", async (req, res) => {
-    try {
-      const validated = insertWorkflowConnectionSchema.parse({
-        ...req.body,
-        workflowId: req.params.id,
-      });
-      const connection = await storage.createConnection(validated);
-      res.json(connection);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid connection data" });
-    }
-  });
+  // Workflow connection endpoints (practice-based)
 
   app.put("/api/workflow-connections/:id", async (req, res) => {
     try {
@@ -686,6 +661,19 @@ export async function registerRoutes(
       res.json(connections);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch workflow connections" });
+    }
+  });
+
+  app.post("/api/practices/:id/workflow-connections", async (req, res) => {
+    try {
+      const validated = insertWorkflowConnectionSchema.parse({
+        ...req.body,
+        practiceId: req.params.id,
+      });
+      const connection = await storage.createConnection(validated);
+      res.json(connection);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid connection data" });
     }
   });
 
