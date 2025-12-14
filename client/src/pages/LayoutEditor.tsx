@@ -98,6 +98,8 @@ export default function LayoutEditor() {
   const [pendingFromRoomId, setPendingFromRoomId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const [showEdgePanel, setShowEdgePanel] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const aiInvalidateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -146,7 +148,13 @@ export default function LayoutEditor() {
     enabled: !!practiceId,
   });
 
-  const activeWorkflow = workflows[0];
+  const activeWorkflow = workflows.find(w => w.id === selectedWorkflowId) || workflows[0];
+  
+  useEffect(() => {
+    if (workflows.length > 0 && !selectedWorkflowId) {
+      setSelectedWorkflowId(workflows[0].id);
+    }
+  }, [workflows, selectedWorkflowId]);
 
   const { data: connections = [] } = useQuery({
     queryKey: ["connections", practiceId],
@@ -484,6 +492,24 @@ export default function LayoutEditor() {
         const toRoom = roomMap.get(conn.toRoomId)!;
         const { path, startX, startY, endX, endY } = computeBezierPath(fromRoom, toRoom);
         
+        const fromCenterX = fromRoom.x + fromRoom.width / 2;
+        const fromCenterY = fromRoom.y + fromRoom.height / 2;
+        const toCenterX = toRoom.x + toRoom.width / 2;
+        const toCenterY = toRoom.y + toRoom.height / 2;
+        const distanceM = Math.sqrt(Math.pow(toCenterX - fromCenterX, 2) + Math.pow(toCenterY - fromCenterY, 2));
+        
+        let distanceClass: "short" | "medium" | "long" = "short";
+        let distanceColor = "rgb(34, 197, 94)";
+        if (distanceM > 7) {
+          distanceClass = "long";
+          distanceColor = "rgb(239, 68, 68)";
+        } else if (distanceM > 2) {
+          distanceClass = "medium";
+          distanceColor = "rgb(245, 158, 11)";
+        }
+        
+        const distanceLabel = distanceClass === "short" ? "Kurz" : distanceClass === "medium" ? "Mittel" : "Lang";
+        
         return {
           id: conn.id,
           path,
@@ -491,9 +517,15 @@ export default function LayoutEditor() {
           midY: (startY + endY) / 2,
           fromRoomId: conn.fromRoomId,
           toRoomId: conn.toRoomId,
+          fromRoomName: fromRoom.name || ROOM_TYPES.find(t => t.id === fromRoom.type)?.label || fromRoom.type,
+          toRoomName: toRoom.name || ROOM_TYPES.find(t => t.id === toRoom.type)?.label || toRoom.type,
+          distanceM: Math.round(distanceM * 10) / 10,
+          distanceClass,
+          distanceColor,
+          distanceLabel,
         };
       });
-  }, [connections, rooms, currentFloor]);
+  }, [connections, rooms, currentFloor, ROOM_TYPES]);
 
   const previewPath = useMemo(() => {
     if (!connectMode || !pendingFromRoomId || !mousePos) return null;
@@ -519,6 +551,20 @@ export default function LayoutEditor() {
         </div>
         
         <div className="flex items-center gap-4">
+          {workflows.length > 0 && (
+            <Select value={selectedWorkflowId || ""} onValueChange={setSelectedWorkflowId}>
+              <SelectTrigger className="h-8 w-[180px] text-xs" data-testid="select-workflow">
+                <SelectValue placeholder="Workflow wählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {workflows.map(wf => (
+                  <SelectItem key={wf.id} value={wf.id} className="text-xs">
+                    {wf.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button
             variant={connectMode ? "default" : "outline"}
             size="sm"
@@ -530,8 +576,20 @@ export default function LayoutEditor() {
             data-testid="button-connect-mode"
           >
             <Link2 className="mr-1.5 h-4 w-4" />
-            {t("editor.connectMode", "Verbinden")}
+            {connectMode ? t("editor.connectModeActive", "Verbinden aktiv") : t("editor.connectMode", "Verbinden")}
           </Button>
+          {connections.length > 0 && (
+            <Button
+              variant={showEdgePanel ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowEdgePanel(prev => !prev)}
+              className="h-8 px-3"
+              data-testid="button-edge-panel"
+            >
+              <ArrowRight className="mr-1.5 h-4 w-4" />
+              {connections.length} {connections.length === 1 ? "Verbindung" : "Verbindungen"}
+            </Button>
+          )}
           <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
             <Button
               variant={currentFloor === -1 ? "default" : "ghost"}
@@ -868,16 +926,55 @@ export default function LayoutEditor() {
             className="absolute inset-0 w-full h-full pointer-events-none z-30"
             data-testid="svg-connections"
           >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="7"
+                refX="9"
+                refY="3.5"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
+              </marker>
+            </defs>
             {connectionArrows.map(arrow => (
               <g key={arrow.id} data-testid={`connection-${arrow.id}`}>
                 <path
                   d={arrow.path}
-                  stroke="#3b82f6"
+                  stroke={arrow.distanceColor}
                   strokeWidth="3"
                   strokeLinecap="round"
                   fill="none"
                   className="transition-all duration-200"
+                  style={{ color: arrow.distanceColor }}
+                  markerEnd="url(#arrowhead)"
                 />
+                {!connectMode && (
+                  <g transform={`translate(${arrow.midX}, ${arrow.midY})`}>
+                    <rect
+                      x="-20"
+                      y="-10"
+                      width="40"
+                      height="20"
+                      fill="white"
+                      rx="4"
+                      stroke={arrow.distanceColor}
+                      strokeWidth="1.5"
+                      className="drop-shadow-sm"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="4"
+                      fontSize="10"
+                      fontWeight="600"
+                      fill={arrow.distanceColor}
+                      className="select-none"
+                    >
+                      {arrow.distanceM}m
+                    </text>
+                  </g>
+                )}
                 {connectMode && (
                   <circle
                     cx={arrow.midX}
@@ -918,6 +1015,67 @@ export default function LayoutEditor() {
             )}
           </svg>
         </div>
+
+        {showEdgePanel && connectionArrows.length > 0 && (
+          <div className="w-56 border-l bg-card flex flex-col z-10 shadow-sm" data-testid="panel-edges">
+            <div className="px-3 py-2 border-b bg-muted/10">
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Link2 className="w-3 h-3" />
+                {t("layout.connections", "Verbindungen")}
+              </h3>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {connectionArrows.map(conn => (
+                  <div 
+                    key={conn.id} 
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg border bg-background/50 hover:bg-accent/50 transition-colors"
+                    data-testid={`edge-item-${conn.id}`}
+                  >
+                    <span 
+                      className="w-2.5 h-2.5 rounded-full shrink-0" 
+                      style={{ backgroundColor: conn.distanceColor }} 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-medium truncate">
+                        {conn.fromRoomName}
+                      </div>
+                      <div className="text-[9px] text-muted-foreground flex items-center gap-1">
+                        <ArrowRight className="w-2.5 h-2.5" />
+                        <span className="truncate">{conn.toRoomName}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span 
+                        className="text-[9px] font-mono font-medium px-1 py-0.5 rounded"
+                        style={{ 
+                          backgroundColor: `${conn.distanceColor}20`,
+                          color: conn.distanceColor 
+                        }}
+                      >
+                        {conn.distanceM}m
+                      </span>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="h-5 w-5 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => deleteConnectionMutation.mutate(conn.id)}
+                        data-testid={`button-delete-edge-${conn.id}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <div className="px-2 py-2 border-t bg-muted/10">
+              <div className="text-[9px] text-muted-foreground text-center">
+                {connectionArrows.length} {connectionArrows.length === 1 ? "Verbindung" : "Verbindungen"}
+              </div>
+            </div>
+          </div>
+        )}
 
         <AnimatePresence>
           {selectedRoom && (
