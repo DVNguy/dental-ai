@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Room, Workflow, WorkflowConnection } from "@shared/schema";
+import type { Room, Workflow, WorkflowStep } from "@shared/schema";
 import type { LayoutEfficiencyResult } from "@/lib/api";
 import { PX_PER_METER, pxToM, mToPx, GRID_M, snapToGridM, clampM, normalizeToMeters, sqM } from "@shared/units";
 import { METERS_PER_TILE, classifyRoomSize, roomSizeBucketLabel, roomSizeBucketColor } from "@shared/layoutUnits";
@@ -165,6 +165,12 @@ export default function LayoutEditor() {
     enabled: !!practiceId,
   });
 
+  const { data: workflowSteps = [] } = useQuery({
+    queryKey: ["workflowSteps", selectedWorkflowId],
+    queryFn: () => api.workflowSteps.list(selectedWorkflowId!),
+    enabled: !!selectedWorkflowId,
+  });
+
   const createWorkflowMutation = useMutation({
     mutationFn: (data: { name: string; actorType: "patient" | "staff" | "instruments" }) =>
       api.workflows.create(practiceId!, data),
@@ -186,6 +192,24 @@ export default function LayoutEditor() {
     mutationFn: (id: string) => api.connections.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
+    },
+  });
+
+  const createWorkflowStepMutation = useMutation({
+    mutationFn: (data: { fromRoomId: string; toRoomId: string; weight?: number }) =>
+      api.workflowSteps.create(selectedWorkflowId!, data),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["workflowSteps", selectedWorkflowId] });
+      queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
+      setPendingFromRoomId(variables.toRoomId);
+    },
+  });
+
+  const deleteWorkflowStepMutation = useMutation({
+    mutationFn: (id: string) => api.workflowSteps.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflowSteps", selectedWorkflowId] });
       queryClient.invalidateQueries({ queryKey: ["layout-efficiency", practiceId] });
     },
   });
@@ -471,8 +495,7 @@ export default function LayoutEditor() {
     if (!pendingFromRoomId) {
       setPendingFromRoomId(roomId);
     } else if (pendingFromRoomId !== roomId) {
-      createConnectionMutation.mutate({ fromRoomId: pendingFromRoomId, toRoomId: roomId });
-      setPendingFromRoomId(null);
+      createWorkflowStepMutation.mutate({ fromRoomId: pendingFromRoomId, toRoomId: roomId });
     }
   };
 
@@ -488,11 +511,11 @@ export default function LayoutEditor() {
     const floorRooms = rooms.filter(r => r.floor === currentFloor);
     const roomMap = new Map(floorRooms.map(r => [r.id, r]));
     
-    return connections
-      .filter(conn => roomMap.has(conn.fromRoomId) && roomMap.has(conn.toRoomId))
-      .map(conn => {
-        const fromRoom = roomMap.get(conn.fromRoomId)!;
-        const toRoom = roomMap.get(conn.toRoomId)!;
+    return workflowSteps
+      .filter(step => roomMap.has(step.fromRoomId) && roomMap.has(step.toRoomId))
+      .map((step, index) => {
+        const fromRoom = roomMap.get(step.fromRoomId)!;
+        const toRoom = roomMap.get(step.toRoomId)!;
         const { path, startX, startY, endX, endY } = computeBezierPath(fromRoom, toRoom);
         
         const fromCenterX = fromRoom.x + fromRoom.width / 2;
@@ -500,7 +523,6 @@ export default function LayoutEditor() {
         const toCenterX = toRoom.x + toRoom.width / 2;
         const toCenterY = toRoom.y + toRoom.height / 2;
         
-        // Calculate edge-to-edge distance (not center-to-center)
         const dx = Math.abs(toCenterX - fromCenterX);
         const dy = Math.abs(toCenterY - fromCenterY);
         const halfWidths = (fromRoom.width + toRoom.width) / 2;
@@ -508,16 +530,12 @@ export default function LayoutEditor() {
         
         let distanceM: number;
         if (dx <= halfWidths && dy <= halfHeights) {
-          // Rooms overlap or touch
           distanceM = 0;
         } else if (dx <= halfWidths) {
-          // Vertically aligned - measure vertical gap
           distanceM = Math.max(0, dy - halfHeights);
         } else if (dy <= halfHeights) {
-          // Horizontally aligned - measure horizontal gap
           distanceM = Math.max(0, dx - halfWidths);
         } else {
-          // Diagonal - measure corner-to-corner distance
           const gapX = dx - halfWidths;
           const gapY = dy - halfHeights;
           distanceM = Math.sqrt(gapX * gapX + gapY * gapY);
@@ -536,12 +554,13 @@ export default function LayoutEditor() {
         const distanceLabel = distanceClass === "short" ? "Kurz" : distanceClass === "medium" ? "Mittel" : "Lang";
         
         return {
-          id: conn.id,
+          id: step.id,
+          stepIndex: step.stepIndex,
           path,
           midX: (startX + endX) / 2,
           midY: (startY + endY) / 2,
-          fromRoomId: conn.fromRoomId,
-          toRoomId: conn.toRoomId,
+          fromRoomId: step.fromRoomId,
+          toRoomId: step.toRoomId,
           fromRoomName: fromRoom.name || ROOM_TYPES.find(t => t.id === fromRoom.type)?.label || fromRoom.type,
           toRoomName: toRoom.name || ROOM_TYPES.find(t => t.id === toRoom.type)?.label || toRoom.type,
           distanceM: Math.round(distanceM * 10) / 10,
@@ -550,7 +569,7 @@ export default function LayoutEditor() {
           distanceLabel,
         };
       });
-  }, [connections, rooms, currentFloor, ROOM_TYPES]);
+  }, [workflowSteps, rooms, currentFloor, ROOM_TYPES]);
 
   const previewPath = useMemo(() => {
     if (!connectMode || !pendingFromRoomId || !mousePos) return null;
@@ -962,7 +981,7 @@ export default function LayoutEditor() {
                     r="12"
                     fill="#ef4444"
                     className="pointer-events-auto cursor-pointer hover:fill-red-600 transition-colors"
-                    onClick={() => deleteConnectionMutation.mutate(arrow.id)}
+                    onClick={() => deleteWorkflowStepMutation.mutate(arrow.id)}
                     data-testid={`button-delete-connection-${arrow.id}`}
                   />
                 )}
@@ -1039,7 +1058,7 @@ export default function LayoutEditor() {
                         variant="ghost" 
                         size="icon"
                         className="h-5 w-5 hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => deleteConnectionMutation.mutate(conn.id)}
+                        onClick={() => deleteWorkflowStepMutation.mutate(conn.id)}
                         data-testid={`button-delete-edge-${conn.id}`}
                       >
                         <Trash2 className="h-3 w-3" />
