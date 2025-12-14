@@ -5,7 +5,9 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints } from "lucide-react";
+import { Plus, Undo, Info, Trash2, RotateCw, X, Settings2, Pencil, Building2, ShieldAlert, Gauge, Lightbulb, ArrowRight, Link2, Footprints, MoreHorizontal, Layers } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -551,10 +553,10 @@ export default function LayoutEditor() {
           <p className="text-xs text-muted-foreground">{t("layout.subtitle")}</p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {workflows.length > 0 && (
             <Select value={selectedWorkflowId || ""} onValueChange={setSelectedWorkflowId}>
-              <SelectTrigger className="h-8 w-[180px] text-xs" data-testid="select-workflow">
+              <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="select-workflow">
                 <SelectValue placeholder="Workflow wählen" />
               </SelectTrigger>
               <SelectContent>
@@ -566,71 +568,71 @@ export default function LayoutEditor() {
               </SelectContent>
             </Select>
           )}
-          <Button
-            variant={connectMode ? "default" : "outline"}
-            size="sm"
-            onClick={toggleConnectMode}
-            className={cn(
-              "h-8 px-3",
-              connectMode && "bg-primary text-primary-foreground"
-            )}
-            data-testid="button-connect-mode"
+          
+          <Select 
+            value={currentFloor.toString()} 
+            onValueChange={(val) => setCurrentFloor(parseInt(val))}
           >
-            <Link2 className="mr-1.5 h-4 w-4" />
-            {connectMode ? t("editor.connectModeActive", "Verbinden aktiv") : t("editor.connectMode", "Verbinden")}
-          </Button>
-          {connections.length > 0 && (
-            <Button
-              variant={showEdgePanel ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setShowEdgePanel(prev => !prev)}
-              className="h-8 px-3"
-              data-testid="button-edge-panel"
-            >
-              <ArrowRight className="mr-1.5 h-4 w-4" />
-              {connections.length} {connections.length === 1 ? "Verbindung" : "Verbindungen"}
-            </Button>
-          )}
-          <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
-            <Button
-              variant={currentFloor === -1 ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setCurrentFloor(-1)}
-              className="h-8 px-3"
-              data-testid="button-floor-ug"
-            >
-              <Building2 className="mr-1.5 h-3 w-3" />
-              {t("editor.floorUG")}
-            </Button>
-            <Button
-              variant={currentFloor === 0 ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setCurrentFloor(0)}
-              className="h-8 px-3"
-              data-testid="button-floor-eg"
-            >
-              <Building2 className="mr-1.5 h-3 w-3" />
-              {t("editor.floorEG")}
-            </Button>
-            <Button
-              variant={currentFloor === 1 ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setCurrentFloor(1)}
-              className="h-8 px-3"
-              data-testid="button-floor-og"
-            >
-              <Building2 className="mr-1.5 h-3 w-3" />
-              {t("editor.floorOG")}
-            </Button>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={clearAllRooms}
-            data-testid="button-reset"
-          >
-            <Undo className="mr-2 h-4 w-4" /> {t("layout.reset")}
-          </Button>
+            <SelectTrigger className="h-8 w-[100px] text-xs" data-testid="select-floor">
+              <Layers className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-1" className="text-xs">{t("editor.floorUG")}</SelectItem>
+              <SelectItem value="0" className="text-xs">{t("editor.floorEG")}</SelectItem>
+              <SelectItem value="1" className="text-xs">{t("editor.floorOG")}</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={connectMode ? "default" : "outline"}
+                size="icon"
+                onClick={toggleConnectMode}
+                className={cn(
+                  "h-8 w-8",
+                  connectMode && "bg-primary text-primary-foreground"
+                )}
+                data-testid="button-connect-mode"
+              >
+                <Link2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {connectMode ? t("editor.connectModeActive", "Verbinden aktiv") : t("editor.connectMode", "Verbinden")}
+            </TooltipContent>
+          </Tooltip>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-8 w-8" data-testid="button-more-menu">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {connections.length > 0 && (
+                <>
+                  <DropdownMenuItem 
+                    onClick={() => setShowEdgePanel(prev => !prev)}
+                    data-testid="menu-edge-panel"
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    {connections.length} {connections.length === 1 ? "Verbindung" : "Verbindungen"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem 
+                onClick={clearAllRooms}
+                className="text-destructive"
+                data-testid="menu-reset"
+              >
+                <Undo className="mr-2 h-4 w-4" />
+                {t("layout.reset")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
