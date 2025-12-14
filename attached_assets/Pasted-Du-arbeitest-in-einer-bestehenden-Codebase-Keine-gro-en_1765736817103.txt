@@ -1,0 +1,38 @@
+Du arbeitest in einer bestehenden Codebase. Keine großen Rewrites.
+
+Ziel (Layout-Upgrade):
+1) LayoutEditor zeigt Maße in "virtuellen Metern" statt px (intern weiter px speichern, UI rechnet um).
+   - Nutze 40px = 1 vMeter (passt zur 40px Grid-Hintergrundkachel).
+   - Zeige Breite/Höhe als z.B. 3,0 m und Fläche als m² (optional).
+2) Füge "Workflow Mode" im LayoutEditor hinzu:
+   - User wählt/erstellt einen Workflow (Patient Flow oder Staff Flow).
+   - Im Workflow Mode: Klick Raum A, dann Klick Raum B => Verbindung A->B erstellen.
+   - Render Verbindungen als moderne gebogene Pfeile (SVG cubic Bezier):
+     * Start/Ende jeweils an der Mitte der passenden Seite (left/right/top/bottom je nach relativer Position).
+     * Kein hässlicher gerader Strahl; immer smooth curve.
+     * Pfeilspitze via SVG markerEnd.
+   - Verbindungen bleiben beim Drag der Räume korrekt (live re-render).
+3) Persistenz:
+   - Lege dafür neue DB-Tabellen via Drizzle an:
+     - workflow_graphs: id, practiceId, name, kind ('patient'|'staff'), createdAt
+     - workflow_edges: id, workflowId, fromRoomId, toRoomId, weight (default 1), createdAt
+   - Erweitere server/storage.ts + server/routes.ts um CRUD:
+     GET /api/practices/:id/workflows
+     POST /api/practices/:id/workflows
+     GET /api/workflows/:workflowId/edges
+     POST /api/workflows/:workflowId/edges
+     DELETE /api/workflow-edges/:edgeId
+4) Client:
+   - Ergänze client/src/lib/api.ts um passende Methods.
+   - Ergänze LayoutEditor UI um:
+     - Toggle "Edit Rooms" vs "Workflow Mode"
+     - Workflow Dropdown + Create Workflow
+     - Edge-Liste + Delete Edge
+     - Edge-Label: "Kurz/Mittel/Lang" (0–2m / 2–7m / >7m) + optional "~X m" als Tooltip
+
+Regeln:
+- Keine personenbezogenen Leistungs-/Stress-Scores; Rollen statt Namen.
+- Minimal invasive Änderungen, nur nötige Dateien anfassen.
+- Gib zuerst einen Plan: konkrete Dateien, DB-Migration-Strategie (nutze vorhandene drizzle scripts), Tests/Commands.
+
+Warte nach dem Plan, implementiere noch nichts.
