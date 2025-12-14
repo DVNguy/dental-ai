@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import type { Room, Staff, WorkflowConnection } from "@shared/schema";
 import {
   ROOM_SIZE_STANDARDS,
@@ -203,81 +204,17 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
 });
 
-/**
- * Strips internal KB citation metadata from recommendation text.
- * Removes:
- * - Bracketed citations: [KB-Quelle: ...], [Quelle X]
- * - Parenthetical citations: (Quelle 1), (Band 6.1, „QM...")
- * - Quoted KB titles: *"Document Title"*, „Document Title"
- * - Source attribution phrases: Laut Coach-Wissen, gemäß Coach-Wissen, basierend auf
- * - Trailing "gemäß ..." with breadcrumb paths containing ">"
- * - Knowledge base file paths and heading structures
- * - Markdown formatting: **bold**, *italic*
- */
-function cleanRecommendationText(text: string): string {
-  let cleaned = text;
-  
-  // STEP 1: Remove complete attribution phrases BEFORE stripping markdown
-  // This preserves the structure so patterns like "basierend auf *Title*" match correctly
-  
-  // Remove "basierend auf *..." patterns with any content including titles
-  cleaned = cleaned.replace(/\s*basierend auf\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
-  
-  // Remove "gemäß *..." patterns with any content
-  cleaned = cleaned.replace(/\s*gemäß\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
-  
-  // Remove "laut *..." patterns with any content  
-  cleaned = cleaned.replace(/\s*laut\s+\*+[^*]+\*+\s*[,:]?/gi, ' ');
-  
-  // Remove "gemäß <breadcrumb path>" patterns (paths with > separators)
-  cleaned = cleaned.replace(/\s*gemäß\s+[^.,!?]*>\s*[^.,!?]+/gi, '');
-  
-  // Remove "basierend auf <breadcrumb path>" patterns
-  cleaned = cleaned.replace(/\s*basierend auf\s+[^.,!?]*>\s*[^.,!?]+/gi, '');
-  
-  // STEP 2: Remove bracketed and parenthetical citations
-  cleaned = cleaned.replace(/\s*\[[^\]]*\]/g, '');
-  cleaned = cleaned.replace(/\s*\([^)]*(?:Quelle|Band|Kapitel)[^)]*\)/gi, '');
-  
-  // STEP 3: Remove "Laut/Gemäß/Nach Coach-Wissen" attribution phrases with all variants
-  // Pattern includes Band/Kapitel descriptors: "Laut Coach-Wissen Band 2 Kapitel 3: ..."
-  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s*[,:]\s*/gi, '');
-  // Handle without punctuation: "Laut Coach-Wissen Band 2 sollten" -> "sollten"
-  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s+/gi, '');
-  // Handle sentence-ending: "Basierend auf Coach-Wissen." -> ""
-  cleaned = cleaned.replace(/\s*(?:Laut|Gemäß|Nach|Basierend auf)\s+(?:Coach-Wissen|dem Coach-Wissen|KB-Wissen|der Wissensbasis)(?:\s+(?:Band|Kapitel)\s*[\d.,]+)*\s*\.?\s*$/gi, '');
-  
-  // Remove standalone Band/Kapitel references that may have leaked
-  cleaned = cleaned.replace(/\s*Band\s+[\d.,]+\s*(?:Kapitel\s+[\d.,]+)?\s*[,:.]?\s*/gi, ' ');
-  
-  // STEP 4: Now remove markdown and quoted titles
-  cleaned = cleaned.replace(/\*+["„][^""]*[""]\*+/g, '');
-  cleaned = cleaned.replace(/„[^"]*(?:Praxis|Coach|Training|Algorithmen|Führung|Architektur|Workflow|Prozess|QM|Zahnarzt|Patientenaufnahme|Übersicht|Checkliste)[^"]*"/gi, '');
-  cleaned = cleaned.replace(/["„][A-Z][^""]*(?:Praxis|Coach|Training|Algorithmen|Führung|Architektur|Workflow|Prozess)[^""]*[""](?:\s*\(Quelle[^)]*\))?/gi, '');
-  
-  // STEP 5: Remove any remaining orphaned attribution words
-  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s+\./gi, '.');
-  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s*$/gi, '');
-  cleaned = cleaned.replace(/\s*(gemäß|basierend auf|laut)\s+,/gi, ',');
-  
-  // STEP 6: Remove markdown bold/italic markers
-  cleaned = cleaned.replace(/\*+/g, '');
-  
-  // STEP 7: Clean up punctuation and spacing
-  cleaned = cleaned.replace(/,\s*\./g, '.');
-  cleaned = cleaned.replace(/\s+/g, ' ');
-  cleaned = cleaned.replace(/\.{2,}/g, '.');
-  cleaned = cleaned.replace(/\s+\./g, '.');
-  cleaned = cleaned.replace(/\.\s*,/g, '.');
-  cleaned = cleaned.trim();
-  
-  // Ensure sentence ends properly
-  if (cleaned.length > 0 && !cleaned.match(/[.!?]$/)) {
-    cleaned += '.';
-  }
-  
-  return cleaned;
-}
+const AIInsightsSchema = z.object({
+  analysis: z.string().describe("Kurze 1-2 Sätze Analyse der aktuellen Praxis-Situation"),
+  keyImprovement: z.string().describe("Die wichtigste Verbesserung basierend auf Coach-Erfahrung"),
+  marketComparison: z.string().describe("Wie die Praxis im Vergleich zu erfolgreichen Praxen abschneidet"),
+  practicalTip: z.string().describe("Ein konkreter, umsetzbarer Tipp aus der Praxis")
+});
+
+const QuickRecommendationSchema = z.object({
+  recommendation: z.string().describe("Die konkrete Empfehlung ohne Quellenangaben"),
+  reasoning: z.string().describe("Kurze Begründung für die Empfehlung")
+});
 
 export interface WorkflowAnalysis {
   workflowCostTotal: number;
@@ -495,7 +432,7 @@ async function generateAIInsights(
     console.log("No coaching knowledge available yet, using base standards");
   }
 
-  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach und Berater. Deine Empfehlungen basieren PRIMÄR auf deinem Coach-Wissen (falls vorhanden) und ergänzend auf deutschen Vorschriften.
+  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach und Berater.
 
 ${coachKnowledge}
 
@@ -513,23 +450,29 @@ DEUTSCHE STANDARDS (Ergänzend):
 AKTUELLE EMPFEHLUNGEN:
 ${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
-WICHTIG: Nutze das Coach-Wissen als primäre Grundlage für deine Empfehlungen. Gib eine kurze, personalisierte 2-3 Sätze Analyse mit Fokus auf:
-1. Die wichtigste Verbesserung basierend auf Coach-Erfahrung
-2. Wie ihr Setup im Vergleich zu erfolgreichen Praxen abschneidet
-3. Ein konkreter, umsetzbarer Tipp aus der Praxis
-
-KEINE QUELLENANGABEN: Zitiere KEINE Dokumenttitel, Kapitelnummern, Bandnummern oder Quellennachweise. Schreibe nur den reinen Empfehlungstext ohne Verweise wie "(Quelle X)", "gemäß Dokument Y", oder "laut Coach-Wissen Band Z".
-
-Halte die Antwort unter 120 Wörtern, professionell aber freundlich. Antworte auf Deutsch.`;
+Analysiere die Praxis und gib strukturierte Empfehlungen. KEINE Quellenangaben, Dokumenttitel oder Kapitelnummern. Nur reiner Empfehlungstext, professionell und freundlich auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 400
+      max_tokens: 500,
+      response_format: { type: "json_object" }
     });
 
-    return response.choices[0]?.message?.content || "KI-Analyse ist derzeit nicht verfügbar.";
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return "KI-Analyse ist derzeit nicht verfügbar.";
+    }
+
+    const parsed = AIInsightsSchema.safeParse(JSON.parse(content));
+    if (!parsed.success) {
+      console.error("AI Insights parse error:", parsed.error);
+      return content;
+    }
+
+    const { analysis, keyImprovement, marketComparison, practicalTip } = parsed.data;
+    return `${analysis}\n\n**Wichtigste Verbesserung:** ${keyImprovement}\n**Marktvergleich:** ${marketComparison}\n**Praxis-Tipp:** ${practicalTip}`;
   } catch (error) {
     console.error("OpenAI API error:", error);
     return "KI-Analyse ist vorübergehend nicht verfügbar. Bitte beachten Sie die benchmark-basierten Empfehlungen oben.";
@@ -601,22 +544,13 @@ export async function analyzeLayout(
     (safeCapacityScore * 0.15)
   );
 
-  const rawAiInsights = await generateAIInsights(
+  const aiInsights = await generateAIInsights(
     rooms,
     staff,
     efficiencyScore,
     staffingAnalysis.overallScore,
     recommendations.slice(0, 5)
   );
-  
-  // Clean AI insights to remove any KB citation metadata
-  const aiInsights = cleanRecommendationText(rawAiInsights);
-
-  // Clean all recommendations to remove internal KB metadata
-  const cleanedRecommendations = recommendations
-    .slice(0, 10)
-    .map(cleanRecommendationText)
-    .filter(r => r.length > 5); // Remove empty or too-short recommendations
 
   return {
     overallScore,
@@ -626,7 +560,7 @@ export async function analyzeLayout(
     roomAnalyses,
     staffingAnalysis,
     capacityAnalysis,
-    recommendations: cleanedRecommendations,
+    recommendations: recommendations.slice(0, 10),
     aiInsights,
     workflowAnalysis
   };
@@ -668,7 +602,7 @@ export async function getQuickRecommendation(
     console.log("No coaching knowledge available yet, using base standards");
   }
 
-  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach. Deine Empfehlungen basieren PRIMÄR auf deinem Coach-Wissen und ergänzend auf deutschen Vorschriften.
+  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach.
 
 ${coachKnowledge}
 
@@ -681,23 +615,30 @@ DEUTSCHE STANDARDS (Ergänzend):
 - Mitarbeiter: 2.5-4.0 pro Arzt
 - Wartezeit-Ziel: <15 Min. (ausgezeichnet)
 
-${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis basierend auf deinem Coach-Wissen."}
+${question ? `NUTZERFRAGE: ${question}` : "Gib eine wichtige Empfehlung zur Verbesserung dieser Praxis."}
 
-WICHTIG: Das Coach-Wissen ist deine primäre Wissensbasis. Nutze es aktiv für alle Empfehlungen.
-
-KEINE QUELLENANGABEN: Zitiere KEINE Dokumenttitel, Kapitelnummern, Bandnummern oder Quellennachweise. Schreibe nur den reinen Empfehlungstext ohne Verweise wie "(Quelle X)", "gemäß Dokument Y", oder "laut Coach-Wissen Band Z".
-
-Halte die Antwort unter 100 Wörtern, spezifisch und umsetzbar. Antworte auf Deutsch.`;
+Gib eine konkrete, umsetzbare Empfehlung. KEINE Quellenangaben, Dokumenttitel oder Kapitelnummern. Unter 100 Wörter, auf Deutsch.`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 300
+      max_tokens: 300,
+      response_format: { type: "json_object" }
     });
 
-    const rawResponse = response.choices[0]?.message?.content || "Empfehlung konnte nicht generiert werden.";
-    return cleanRecommendationText(rawResponse);
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return "Empfehlung konnte nicht generiert werden.";
+    }
+
+    const parsed = QuickRecommendationSchema.safeParse(JSON.parse(content));
+    if (!parsed.success) {
+      console.error("Quick recommendation parse error:", parsed.error);
+      return content;
+    }
+
+    return parsed.data.recommendation;
   } catch (error) {
     console.error("OpenAI API error:", error);
     return "KI-Empfehlungen sind vorübergehend nicht verfügbar. Bitte prüfen Sie Ihr Layout gegen die deutschen Standards.";

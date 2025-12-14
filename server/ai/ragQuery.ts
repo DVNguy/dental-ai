@@ -1,8 +1,6 @@
 import OpenAI from "openai";
 import { tavily } from "@tavily/core";
-import { db } from "../db";
-import { knowledgeSources, knowledgeChunks } from "../../shared/schema";
-import { sql, eq, desc } from "drizzle-orm";
+import { storage } from "../storage";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const tavilyClient = process.env.TAVILY_API_KEY 
@@ -56,28 +54,14 @@ export async function retrieveKnowledgeChunks(
   topK: number = 5
 ): Promise<RetrievedChunk[]> {
   const queryEmbedding = await generateEmbedding(question);
-  const embeddingStr = `[${queryEmbedding.join(",")}]`;
+  const results = await storage.searchKnowledgeChunks(queryEmbedding, topK);
 
-  const results = await db.execute(sql`
-    SELECT 
-      kc.id,
-      ks.file_name as doc_name,
-      kc.heading_path,
-      kc.content,
-      1 - (kc.embedding <=> ${embeddingStr}::vector) as score
-    FROM knowledge_chunks kc
-    JOIN knowledge_sources ks ON kc.source_id = ks.id
-    WHERE kc.embedding IS NOT NULL
-    ORDER BY kc.embedding <=> ${embeddingStr}::vector
-    LIMIT ${topK}
-  `);
-
-  return (results.rows as any[]).map(row => ({
+  return results.map(row => ({
     id: row.id,
-    docName: row.doc_name,
-    headingPath: row.heading_path,
+    docName: row.source.fileName,
+    headingPath: row.headingPath,
     content: row.content,
-    score: parseFloat(row.score) || 0
+    score: row.similarity || 0
   }));
 }
 
