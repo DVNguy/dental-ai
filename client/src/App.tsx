@@ -8,6 +8,7 @@ import Staff from "@/pages/Staff";
 import Simulation from "@/pages/Simulation";
 import Knowledge from "@/pages/Knowledge";
 import Playbooks from "@/pages/Playbooks";
+import Debug from "@/pages/Debug";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/simulation" component={Simulation} />
         <Route path="/knowledge" component={Knowledge} />
         <Route path="/playbooks" component={Playbooks} />
+        <Route path="/debug" component={Debug} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

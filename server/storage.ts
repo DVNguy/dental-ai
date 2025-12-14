@@ -26,10 +26,40 @@ import {
   simulations,
   knowledgeSources,
   knowledgeChunks,
+  knowledgeArtifacts,
   workflows,
   workflowConnections,
   workflowSteps
 } from "@shared/schema";
+
+export interface TableStats {
+  count: number;
+  latestCreatedAt?: string | null;
+  latestUpdatedAt?: string | null;
+}
+
+export interface DebugStats {
+  tables: {
+    users: TableStats;
+    practices: TableStats;
+    rooms: TableStats;
+    staff: TableStats;
+    simulations: TableStats;
+    knowledgeSources: TableStats;
+    knowledgeChunks: TableStats;
+    knowledgeArtifacts: TableStats;
+    workflows: TableStats;
+    workflowConnections: TableStats;
+    workflowSteps: TableStats;
+  };
+  ragConfig: {
+    embeddingModel: string;
+    vectorDimensions: number;
+    targetChunkTokens: string;
+    overlap: number;
+  };
+  workflowDuplicates: { slug: string; practiceId: string; count: number }[];
+}
 import { db } from "./db";
 import { eq, sql, desc } from "drizzle-orm";
 
@@ -79,6 +109,8 @@ export interface IStorage {
   createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep>;
   deleteWorkflowStep(id: string): Promise<void>;
   getMaxStepIndex(workflowId: string): Promise<number>;
+  
+  getDebugStats(): Promise<DebugStats>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -334,6 +366,74 @@ export class DatabaseStorage implements IStorage {
       WHERE workflow_id = ${workflowId}
     `);
     return Number((result.rows[0] as any)?.max_index ?? -1);
+  }
+
+  async getDebugStats(): Promise<DebugStats> {
+    const parseTableStats = (row: any): TableStats => ({
+      count: Number(row?.c ?? 0),
+      latestCreatedAt: row?.latest_created ?? null,
+      latestUpdatedAt: row?.latest_updated ?? null,
+    });
+
+    const [
+      usersStats,
+      practicesStats,
+      roomsStats,
+      staffStats,
+      simsStats,
+      ksStats,
+      kcStats,
+      kaStats,
+      wfStats,
+      wcStats,
+      wsStats,
+      duplicates
+    ] = await Promise.all([
+      db.execute(sql`SELECT COUNT(*) as c FROM users`),
+      db.execute(sql`SELECT COUNT(*) as c FROM practices`),
+      db.execute(sql`SELECT COUNT(*) as c FROM rooms`),
+      db.execute(sql`SELECT COUNT(*) as c FROM staff`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(timestamp) as latest_created FROM simulations`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(uploaded_at) as latest_created, MAX(updated_at) as latest_updated FROM knowledge_sources`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(created_at) as latest_created FROM knowledge_chunks`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(created_at) as latest_created FROM knowledge_artifacts`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(created_at) as latest_created FROM workflows`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(created_at) as latest_created FROM workflow_connections`),
+      db.execute(sql`SELECT COUNT(*) as c, MAX(created_at) as latest_created FROM workflow_steps`),
+      db.execute(sql`
+        SELECT slug, practice_id as "practiceId", COUNT(*) as count
+        FROM workflows
+        GROUP BY slug, practice_id
+        HAVING COUNT(*) > 1
+      `),
+    ]);
+
+    return {
+      tables: {
+        users: parseTableStats(usersStats.rows[0]),
+        practices: parseTableStats(practicesStats.rows[0]),
+        rooms: parseTableStats(roomsStats.rows[0]),
+        staff: parseTableStats(staffStats.rows[0]),
+        simulations: parseTableStats(simsStats.rows[0]),
+        knowledgeSources: parseTableStats(ksStats.rows[0]),
+        knowledgeChunks: parseTableStats(kcStats.rows[0]),
+        knowledgeArtifacts: parseTableStats(kaStats.rows[0]),
+        workflows: parseTableStats(wfStats.rows[0]),
+        workflowConnections: parseTableStats(wcStats.rows[0]),
+        workflowSteps: parseTableStats(wsStats.rows[0]),
+      },
+      ragConfig: {
+        embeddingModel: "text-embedding-3-small",
+        vectorDimensions: 1536,
+        targetChunkTokens: "600-900 (optimal: 750)",
+        overlap: 100,
+      },
+      workflowDuplicates: (duplicates.rows as any[]).map(row => ({
+        slug: row.slug,
+        practiceId: row.practiceId,
+        count: Number(row.count),
+      })),
+    };
   }
 }
 

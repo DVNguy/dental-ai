@@ -41,6 +41,24 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  app.get("/api/debug/status", async (req, res) => {
+    const isDebugEnabled = process.env.DEBUG_STATUS === "true" || process.env.NODE_ENV !== "production";
+    if (!isDebugEnabled) {
+      return res.status(403).json({ error: "Debug endpoint disabled in production" });
+    }
+    try {
+      const stats = await storage.getDebugStats();
+      res.json({
+        ...stats,
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || "development",
+      });
+    } catch (error) {
+      console.error("Debug stats error:", error);
+      res.status(500).json({ error: "Failed to fetch debug stats" });
+    }
+  });
+
   app.get("/api/practices/:id", async (req, res) => {
     try {
       const practice = await storage.getPractice(req.params.id);

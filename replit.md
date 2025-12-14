@@ -40,6 +40,7 @@ Preferred communication style: Simple, everyday language.
 - Staff Management: View and manage staff members
 - Simulation: Run scenarios with configurable parameters
 - AI Praxis-Coach: Interactive AI coaching chat for practice optimization advice
+- Debug (/debug): Hidden system diagnostics page (not in sidebar) - shows DB counts, timestamps, RAG config, workflow duplicates
 
 ### Backend Architecture
 
@@ -56,6 +57,7 @@ Preferred communication style: Simple, everyday language.
 - `/api/ai/*` - AI analysis and recommendations
 - `/api/knowledge` - Coach knowledge base (list, get, search - read-only for users)
 - `/api/ai/coach-chat` - Interactive AI coaching chat with RAG-based knowledge retrieval
+- `/api/debug/status` - System diagnostics (counts, timestamps, RAG config) - only enabled when DEBUG_STATUS=true or NODE_ENV !== "production"
 
 **Key Design Patterns**:
 - Storage abstraction layer (IStorage interface) for database operations
