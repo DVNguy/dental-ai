@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { Room, Staff, WorkflowConnection } from "@shared/schema";
 import {
@@ -432,9 +433,9 @@ async function generateAIInsights(
     console.log("No coaching knowledge available yet, using base standards");
   }
 
-  const prompt = `Du bist ein erfahrener Zahnarztpraxis-Coach und Berater.
+  const systemPrompt = `Du bist ein erfahrener Zahnarztpraxis-Coach und Berater. Gib strukturierte Empfehlungen basierend auf den Praxisdaten. KEINE Quellenangaben, Dokumenttitel oder Kapitelnummern. Nur reiner Empfehlungstext, professionell und freundlich auf Deutsch.`;
 
-${coachKnowledge}
+  const userPrompt = `${coachKnowledge}
 
 PRAXIS-DATEN:
 - Räume: ${roomsSummary || "Noch keine Räume"}
@@ -450,14 +451,17 @@ DEUTSCHE STANDARDS (Ergänzend):
 AKTUELLE EMPFEHLUNGEN:
 ${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
-Analysiere die Praxis und gib strukturierte Empfehlungen. KEINE Quellenangaben, Dokumenttitel oder Kapitelnummern. Nur reiner Empfehlungstext, professionell und freundlich auf Deutsch.`;
+Analysiere die Praxis und gib strukturierte Empfehlungen.`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
       max_tokens: 500,
-      response_format: { type: "json_object" }
+      response_format: zodResponseFormat(AIInsightsSchema, "ai_insights")
     });
 
     const content = response.choices[0]?.message?.content;
@@ -471,8 +475,8 @@ Analysiere die Praxis und gib strukturierte Empfehlungen. KEINE Quellenangaben, 
       return content;
     }
 
-    const { analysis, keyImprovement, marketComparison, practicalTip } = parsed.data;
-    return `${analysis}\n\n**Wichtigste Verbesserung:** ${keyImprovement}\n**Marktvergleich:** ${marketComparison}\n**Praxis-Tipp:** ${practicalTip}`;
+    const insight = parsed.data;
+    return `${insight.analysis}\n\n**Wichtigste Verbesserung:** ${insight.keyImprovement}\n**Marktvergleich:** ${insight.marketComparison}\n**Praxis-Tipp:** ${insight.practicalTip}`;
   } catch (error) {
     console.error("OpenAI API error:", error);
     return "KI-Analyse ist vorübergehend nicht verfügbar. Bitte beachten Sie die benchmark-basierten Empfehlungen oben.";
@@ -624,7 +628,7 @@ Gib eine konkrete, umsetzbare Empfehlung. KEINE Quellenangaben, Dokumenttitel od
       model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 300,
-      response_format: { type: "json_object" }
+      response_format: zodResponseFormat(QuickRecommendationSchema, "quick_recommendation")
     });
 
     const content = response.choices[0]?.message?.content;
