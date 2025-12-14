@@ -4,6 +4,7 @@ export const CANONICAL_ROOM_TYPES = [
   "reception",
   "waiting", 
   "exam",
+  "xray",
   "lab",
   "office",
   "sterilization",
@@ -37,6 +38,12 @@ const ROOM_TYPE_ALIASES: Record<string, CanonicalRoomType> = {
   "lab": "lab",
   "labor": "lab",
   "laboratory": "lab",
+  
+  "xray": "xray",
+  "röntgen": "xray",
+  "roentgen": "xray",
+  "röntgenraum": "xray",
+  "x-ray": "xray",
   
   "office": "office",
   "büro": "office",
