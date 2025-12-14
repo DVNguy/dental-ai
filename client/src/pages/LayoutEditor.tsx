@@ -696,6 +696,43 @@ export default function LayoutEditor() {
                 </div>
               )}
               
+              {efficiencyData.workflowAnalysis && (
+                <div className="mt-2 pt-2 border-t" data-testid="section-workflow-analysis">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Link2 className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        {t("layout.workflowScore", "Workflow-Effizienz")}
+                      </span>
+                    </div>
+                    <div className={cn(
+                      "text-sm font-bold",
+                      efficiencyData.workflowAnalysis.workflowScore >= 70 ? "text-green-600" : 
+                      efficiencyData.workflowAnalysis.workflowScore >= 40 ? "text-amber-600" : "text-red-600"
+                    )} data-testid="text-workflow-score">
+                      {efficiencyData.workflowAnalysis.workflowScore}/100
+                    </div>
+                  </div>
+                  {efficiencyData.workflowAnalysis.topConnections.length > 0 && (
+                    <div className="space-y-1 mb-1.5">
+                      {efficiencyData.workflowAnalysis.topConnections.slice(0, 2).map((conn, i) => (
+                        <div key={i} className="flex items-center gap-1 text-[9px]">
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            conn.distanceClass === "short" ? "bg-green-500" :
+                            conn.distanceClass === "medium" ? "bg-amber-500" : "bg-red-500"
+                          )} />
+                          <span className="text-muted-foreground truncate">
+                            {conn.fromName} → {conn.toName}
+                          </span>
+                          <span className="ml-auto font-medium">{conn.distance}m</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {efficiencyData.workflowMetrics && (
                 <div className="mt-2 pt-2 border-t" data-testid="section-workflow-metrics">
                   <div className="flex items-center gap-1.5 mb-1.5">

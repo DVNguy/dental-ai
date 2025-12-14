@@ -11,7 +11,7 @@ import {
 } from "@shared/schema";
 import { runSimulation, calculateLayoutEfficiencyBreakdown, type SimulationParameters } from "./simulation";
 import { computeLayoutEfficiency, computeWorkflowMetrics } from "./ai/layoutEfficiency";
-import { analyzeLayout, getQuickRecommendation } from "./ai/advisor";
+import { analyzeLayout, getQuickRecommendation, computeWorkflowAnalysis } from "./ai/advisor";
 import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { searchKnowledge } from "./ai/knowledgeProcessor";
 import { generateCoachResponse } from "./ai/coachChat";
@@ -106,6 +106,7 @@ export async function registerRoutes(
       const result = computeLayoutEfficiency(rooms);
       
       const connections = await storage.getConnectionsByPracticeId(practiceId);
+      const workflowAnalysis = computeWorkflowAnalysis(rooms, connections);
       let workflowMetrics = null;
       let workflowTips: string[] = [];
       
@@ -148,6 +149,7 @@ export async function registerRoutes(
         score: finalScore,
         tips: [...result.tips, ...workflowTips].slice(0, 6),
         workflowMetrics: workflowMetrics || undefined,
+        workflowAnalysis,
       });
     } catch (error) {
       console.error("Layout efficiency error:", error);
@@ -324,8 +326,9 @@ export async function registerRoutes(
 
       const rooms = await storage.getRoomsByPracticeId(practiceId);
       const staff = await storage.getStaffByPracticeId(practiceId);
+      const connections = await storage.getConnectionsByPracticeId(practiceId);
 
-      const analysis = await analyzeLayout(rooms, staff, operatingHours, practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER);
+      const analysis = await analyzeLayout(rooms, staff, operatingHours, practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER, connections);
       res.json(analysis);
     } catch (error) {
       if (error instanceof z.ZodError) {

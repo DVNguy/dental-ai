@@ -140,6 +140,20 @@ export const api = {
   },
 };
 
+export interface WorkflowAnalysis {
+  workflowCostTotal: number;
+  workflowScore: number;
+  topConnections: Array<{
+    fromName: string;
+    toName: string;
+    distance: number;
+    distanceClass: "short" | "medium" | "long";
+    weight: number;
+    cost: number;
+  }>;
+  recommendations: string[];
+}
+
 export interface LayoutAnalysis {
   overallScore: number;
   efficiencyScore: number;
@@ -150,6 +164,7 @@ export interface LayoutAnalysis {
   capacityAnalysis: CapacityAnalysis;
   recommendations: string[];
   aiInsights: string;
+  workflowAnalysis?: WorkflowAnalysis;
 }
 
 export interface RoomAnalysis {
@@ -207,4 +222,5 @@ export interface LayoutEfficiencyResult {
   }>;
   tips: string[];
   workflowMetrics?: WorkflowMetrics;
+  workflowAnalysis?: WorkflowAnalysis;
 }

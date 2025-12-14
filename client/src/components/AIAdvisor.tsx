@@ -22,7 +22,9 @@ import {
   AlertCircle,
   CheckCircle,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Workflow,
+  ArrowRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -181,7 +183,49 @@ export function AIAdvisor({ collapsed = false, onToggle }: AIAdvisorProps) {
               <ScoreGauge score={analysis.efficiencyScore} label="Layout Efficiency" icon={LayoutGrid} />
               <ScoreGauge score={analysis.staffingScore} label="Staffing Optimization" icon={Users} />
               <ScoreGauge score={analysis.spaceUtilizationScore} label="Space Utilization" icon={Target} />
+              <ScoreGauge score={analysis.workflowAnalysis?.workflowScore ?? 70} label="Workflow Efficiency" icon={Workflow} />
             </div>
+
+            {analysis.workflowAnalysis && analysis.workflowAnalysis.topConnections.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Workflow className="h-4 w-4 text-blue-500" />
+                    <span>Top Workflow Connections</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {analysis.workflowAnalysis.topConnections.map((conn, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs p-2 rounded bg-muted/50" data-testid={`workflow-connection-${i}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium">{conn.fromName}</span>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          <span className="font-medium">{conn.toName}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                            conn.distanceClass === "short" && "bg-green-100 text-green-700",
+                            conn.distanceClass === "medium" && "bg-yellow-100 text-yellow-700",
+                            conn.distanceClass === "long" && "bg-red-100 text-red-700"
+                          )}>
+                            {conn.distanceClass === "short" ? "Kurz" : conn.distanceClass === "medium" ? "Mittel" : "Lang"} • {conn.distance}m
+                          </span>
+                          {conn.weight > 1 && (
+                            <span className="px-1 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700">
+                              ×{conn.weight}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Gesamtkosten: {analysis.workflowAnalysis.workflowCostTotal}
+                  </div>
+                </div>
+              </>
+            )}
 
             <Separator />
 

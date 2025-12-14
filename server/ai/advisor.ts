@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { Room, Staff } from "@shared/schema";
+import type { Room, Staff, WorkflowConnection } from "@shared/schema";
 import {
   ROOM_SIZE_STANDARDS,
   STAFFING_RATIOS,
@@ -19,6 +19,184 @@ import {
   getKnowledgePoweredRecommendations
 } from "./artifactBenchmarks";
 import { formatCitations } from "./artifactService";
+import { pxToM } from "@shared/units";
+
+const DISTANCE_CLASS_THRESHOLDS = {
+  short: { min: 0, max: 3 },
+  medium: { min: 3, max: 8 },
+  long: { min: 8, max: Infinity }
+};
+
+const DISTANCE_CLASS_WEIGHTS = {
+  short: 1.0,
+  medium: 1.5,
+  long: 2.0
+};
+
+function getDistanceClass(distanceMeters: number): "short" | "medium" | "long" {
+  if (distanceMeters <= DISTANCE_CLASS_THRESHOLDS.short.max) return "short";
+  if (distanceMeters <= DISTANCE_CLASS_THRESHOLDS.medium.max) return "medium";
+  return "long";
+}
+
+export function computeWorkflowAnalysis(
+  rooms: Room[],
+  connections: WorkflowConnection[]
+): WorkflowAnalysis {
+  const roomMap = new Map(rooms.map(r => [r.id, r]));
+  
+  if (connections.length === 0) {
+    return {
+      workflowCostTotal: 0,
+      workflowScore: 70,
+      topConnections: [],
+      recommendations: [
+        "Verbinden Sie Räume im Layout-Editor, um Arbeitsabläufe sichtbar zu machen.",
+        "Kanban-Prinzip anwenden: Check-In → Warten → Behandlung → Check-Out als Workflow definieren.",
+        "Beginnen Sie mit dem häufigsten Patientenpfad (Empfang → Wartebereich → Behandlungsraum).",
+        "Materialien an frequentierten Stationen vorhalten, um Laufwege zu minimieren.",
+        "Standardisierte Checklisten für wiederkehrende Abläufe einführen."
+      ]
+    };
+  }
+
+  const connectionDetails: Array<{
+    fromName: string;
+    toName: string;
+    distance: number;
+    distanceClass: "short" | "medium" | "long";
+    weight: number;
+    cost: number;
+    fromRoomId: string;
+    toRoomId: string;
+  }> = [];
+
+  let totalCost = 0;
+  const visitedPairs = new Map<string, number>();
+
+  for (const conn of connections) {
+    const fromRoom = roomMap.get(conn.fromRoomId);
+    const toRoom = roomMap.get(conn.toRoomId);
+    
+    if (!fromRoom || !toRoom) continue;
+
+    const fromCenter = { x: fromRoom.x + fromRoom.width / 2, y: fromRoom.y + fromRoom.height / 2 };
+    const toCenter = { x: toRoom.x + toRoom.width / 2, y: toRoom.y + toRoom.height / 2 };
+    
+    const distancePx = Math.sqrt(
+      Math.pow(toCenter.x - fromCenter.x, 2) + Math.pow(toCenter.y - fromCenter.y, 2)
+    );
+    const distanceMeters = pxToM(distancePx);
+    
+    const distanceClass = conn.distanceClass === "auto" || !conn.distanceClass
+      ? getDistanceClass(distanceMeters)
+      : conn.distanceClass as "short" | "medium" | "long";
+    
+    const userWeight = conn.weight || 1;
+    const classWeight = DISTANCE_CLASS_WEIGHTS[distanceClass];
+    const cost = distanceMeters * userWeight * classWeight;
+    
+    totalCost += cost;
+
+    connectionDetails.push({
+      fromName: fromRoom.name || fromRoom.type,
+      toName: toRoom.name || toRoom.type,
+      distance: Math.round(distanceMeters * 10) / 10,
+      distanceClass,
+      weight: userWeight,
+      cost: Math.round(cost * 10) / 10,
+      fromRoomId: conn.fromRoomId,
+      toRoomId: conn.toRoomId
+    });
+
+    const pairKey = [conn.fromRoomId, conn.toRoomId].sort().join("-");
+    visitedPairs.set(pairKey, (visitedPairs.get(pairKey) || 0) + 1);
+  }
+
+  const backtrackingPairs = Array.from(visitedPairs.entries()).filter(([_, count]) => count > 1);
+  const hasBacktracking = backtrackingPairs.length > 0;
+  const longConnections = connectionDetails.filter(c => c.distanceClass === "long");
+  const mediumConnections = connectionDetails.filter(c => c.distanceClass === "medium");
+  const hasLongConnections = longConnections.length > 0;
+
+  const avgCostPerConnection = connections.length > 0 ? totalCost / connections.length : 0;
+  const penaltyPerPoint = 2;
+  const normalizedPenalty = Math.min(30, avgCostPerConnection * penaltyPerPoint / 3);
+  let workflowScore = Math.round(100 - normalizedPenalty);
+  
+  if (hasBacktracking) workflowScore -= 3;
+  if (hasLongConnections) workflowScore -= longConnections.length * 2;
+  if (mediumConnections.length > 2) workflowScore -= 2;
+  
+  workflowScore = Math.max(0, Math.min(100, workflowScore));
+
+  const recommendations: string[] = [];
+
+  if (hasLongConnections) {
+    const longNames = longConnections.map(c => `${c.fromName}→${c.toName}`).join(", ");
+    recommendations.push(
+      `Lange Wege (${longNames}): Material-Staging an diesen Stationen einrichten oder Aufgaben bündeln.`
+    );
+  }
+
+  if (hasBacktracking) {
+    recommendations.push(
+      "Rückläufige Bewegungen: Checklisten und standardisierte Abläufe helfen, Hin- und Herlaufen zu reduzieren."
+    );
+  }
+
+  const patientKind = connections.filter(c => c.kind === "patient");
+  const staffKind = connections.filter(c => c.kind === "staff");
+  
+  if (patientKind.length === 0 && staffKind.length > 0) {
+    recommendations.push(
+      "Patientenpfad definieren: Check-In → Warten → Behandlung als separate Verbindungen anlegen."
+    );
+  }
+
+  if (avgCostPerConnection > 12) {
+    recommendations.push(
+      "Hohe Wegkosten: Prüfen Sie Material-Bereitstellung und Aufgaben-Bündelung an frequentierten Stationen."
+    );
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push(
+      "Gute Arbeitsabläufe! Materialien direkt am Einsatzort lagern optimiert den Workflow weiter."
+    );
+  }
+
+  if (recommendations.length < 3) {
+    recommendations.push(
+      "Lean-Tipp: Kanban-Tafeln (Check-In → Warten → Behandlung → Check-Out) machen den Workflow sichtbar."
+    );
+  }
+
+  if (recommendations.length < 4 && mediumConnections.length > 0) {
+    recommendations.push(
+      "Mittlere Distanzen: Überlegen Sie, ob häufig benötigte Materialien an Zwischenstationen bereitgestellt werden können."
+    );
+  }
+
+  const topConnections = connectionDetails
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, 3)
+    .map(({ fromName, toName, distance, distanceClass, weight, cost }) => ({
+      fromName,
+      toName,
+      distance,
+      distanceClass,
+      weight,
+      cost
+    }));
+
+  return {
+    workflowCostTotal: Math.round(totalCost * 10) / 10,
+    workflowScore,
+    topConnections,
+    recommendations: recommendations.slice(0, 5)
+  };
+}
 
 const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -101,6 +279,20 @@ function cleanRecommendationText(text: string): string {
   return cleaned;
 }
 
+export interface WorkflowAnalysis {
+  workflowCostTotal: number;
+  workflowScore: number;
+  topConnections: Array<{
+    fromName: string;
+    toName: string;
+    distance: number;
+    distanceClass: "short" | "medium" | "long";
+    weight: number;
+    cost: number;
+  }>;
+  recommendations: string[];
+}
+
 export interface LayoutAnalysis {
   overallScore: number;
   efficiencyScore: number;
@@ -111,6 +303,7 @@ export interface LayoutAnalysis {
   capacityAnalysis: CapacityAnalysis;
   recommendations: string[];
   aiInsights: string;
+  workflowAnalysis?: WorkflowAnalysis;
 }
 
 export interface RoomAnalysis {
@@ -347,9 +540,12 @@ export async function analyzeLayout(
   rooms: Room[],
   staff: Staff[],
   operatingHours: number = 8,
-  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER
+  scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER,
+  connections: WorkflowConnection[] = []
 ): Promise<LayoutAnalysis> {
   const efficiencyScore = calculateLayoutEfficiencyScore(rooms, scalePxPerMeter);
+  
+  const workflowAnalysis = computeWorkflowAnalysis(rooms, connections);
   
   const roomAnalyses = await analyzeRoomsWithKnowledge(rooms, scalePxPerMeter);
   const avgRoomScore = roomAnalyses.length > 0
@@ -431,7 +627,8 @@ export async function analyzeLayout(
     staffingAnalysis,
     capacityAnalysis,
     recommendations: cleanedRecommendations,
-    aiInsights
+    aiInsights,
+    workflowAnalysis
   };
 }
 
