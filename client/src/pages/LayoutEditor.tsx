@@ -499,7 +499,29 @@ export default function LayoutEditor() {
         const fromCenterY = fromRoom.y + fromRoom.height / 2;
         const toCenterX = toRoom.x + toRoom.width / 2;
         const toCenterY = toRoom.y + toRoom.height / 2;
-        const distanceM = Math.sqrt(Math.pow(toCenterX - fromCenterX, 2) + Math.pow(toCenterY - fromCenterY, 2));
+        
+        // Calculate edge-to-edge distance (not center-to-center)
+        const dx = Math.abs(toCenterX - fromCenterX);
+        const dy = Math.abs(toCenterY - fromCenterY);
+        const halfWidths = (fromRoom.width + toRoom.width) / 2;
+        const halfHeights = (fromRoom.height + toRoom.height) / 2;
+        
+        let distanceM: number;
+        if (dx <= halfWidths && dy <= halfHeights) {
+          // Rooms overlap or touch
+          distanceM = 0;
+        } else if (dx <= halfWidths) {
+          // Vertically aligned - measure vertical gap
+          distanceM = Math.max(0, dy - halfHeights);
+        } else if (dy <= halfHeights) {
+          // Horizontally aligned - measure horizontal gap
+          distanceM = Math.max(0, dx - halfWidths);
+        } else {
+          // Diagonal - measure corner-to-corner distance
+          const gapX = dx - halfWidths;
+          const gapY = dy - halfHeights;
+          distanceM = Math.sqrt(gapX * gapX + gapY * gapY);
+        }
         
         let distanceClass: "short" | "medium" | "long" = "short";
         let distanceColor = "rgb(34, 197, 94)";
@@ -933,31 +955,6 @@ export default function LayoutEditor() {
                   fill="none"
                   className="transition-all duration-200"
                 />
-                {!connectMode && (
-                  <g transform={`translate(${arrow.midX}, ${arrow.midY})`}>
-                    <rect
-                      x="-20"
-                      y="-10"
-                      width="40"
-                      height="20"
-                      fill="white"
-                      rx="4"
-                      stroke={arrow.distanceColor}
-                      strokeWidth="1.5"
-                      className="drop-shadow-sm"
-                    />
-                    <text
-                      textAnchor="middle"
-                      dy="4"
-                      fontSize="10"
-                      fontWeight="600"
-                      fill={arrow.distanceColor}
-                      className="select-none"
-                    >
-                      {arrow.distanceM}m
-                    </text>
-                  </g>
-                )}
                 {connectMode && (
                   <circle
                     cx={arrow.midX}
