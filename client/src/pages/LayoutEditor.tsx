@@ -674,7 +674,7 @@ export default function LayoutEditor() {
             variant="outline"
             size="sm"
             onClick={triggerAnalysis}
-            disabled={isAnalysisLoading || workflowSteps.length === 0}
+            disabled={isAnalysisLoading}
             className="h-8 px-3"
             data-testid="button-workflow-analysis"
           >
@@ -1280,6 +1280,26 @@ export default function LayoutEditor() {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : workflowAnalysis ? (
+            workflowAnalysis.workflows.length === 0 ? (
+              <div className="text-center py-8 space-y-3" data-testid="no-workflow-steps-message">
+                <div className="text-muted-foreground">
+                  Keine Workflow-Schritte vorhanden
+                </div>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                  Um die Workflow-Analyse zu nutzen, verbinden Sie Räume mit dem "Verbinden"-Button. Klicken Sie auf einen Raum als Start, dann auf einen anderen als Ziel.
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => { setShowAnalysisModal(false); setConnectMode(true); }}
+                  className="mt-2"
+                  data-testid="button-start-connecting"
+                >
+                  <Link2 className="h-4 w-4 mr-1.5" />
+                  Workflow erstellen
+                </Button>
+              </div>
+            ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
@@ -1380,6 +1400,7 @@ export default function LayoutEditor() {
                 </div>
               )}
             </div>
+            )
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               Keine Analyse-Daten verfügbar
