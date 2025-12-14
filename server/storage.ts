@@ -67,6 +67,7 @@ export interface IStorage {
 
   getWorkflowsByPracticeId(practiceId: string): Promise<Workflow[]>;
   createWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
+  upsertWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
   deleteWorkflow(id: string): Promise<void>;
   
   getConnectionsByPracticeId(practiceId: string): Promise<WorkflowConnection[]>;
@@ -258,6 +259,29 @@ export class DatabaseStorage implements IStorage {
   async createWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
     const result = await db.insert(workflows).values(workflow as any).returning();
     return result[0];
+  }
+
+  async upsertWorkflow(workflow: InsertWorkflow): Promise<Workflow> {
+    const result = await db.execute(sql`
+      INSERT INTO workflows (practice_id, slug, name, actor_type, source)
+      VALUES (${workflow.practiceId}, ${workflow.slug}, ${workflow.name}, ${workflow.actorType}, ${workflow.source || 'custom'})
+      ON CONFLICT (practice_id, slug) DO UPDATE SET 
+        name = EXCLUDED.name,
+        actor_type = EXCLUDED.actor_type,
+        source = EXCLUDED.source
+      RETURNING *
+    `);
+    
+    const row = result.rows[0] as any;
+    return {
+      id: row.id,
+      practiceId: row.practice_id,
+      slug: row.slug,
+      name: row.name,
+      actorType: row.actor_type,
+      source: row.source,
+      createdAt: row.created_at,
+    };
   }
 
   async deleteWorkflow(id: string): Promise<void> {

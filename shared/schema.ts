@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, jsonb, timestamp, vector } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, jsonb, timestamp, vector, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -91,13 +91,20 @@ export const knowledgeArtifacts = pgTable("knowledge_artifacts", {
 export const WORKFLOW_ACTOR_TYPES = ["patient", "staff", "instruments"] as const;
 export type WorkflowActorType = typeof WORKFLOW_ACTOR_TYPES[number];
 
+export const WORKFLOW_SOURCES = ["builtin", "custom", "knowledge"] as const;
+export type WorkflowSource = typeof WORKFLOW_SOURCES[number];
+
 export const workflows = pgTable("workflows", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull(),
   name: text("name").notNull(),
   actorType: text("actor_type").notNull().$type<WorkflowActorType>(),
+  source: text("source").notNull().$type<WorkflowSource>().default("custom"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("workflows_practice_slug_idx").on(table.practiceId, table.slug),
+]);
 
 export const CONNECTION_KINDS = ["patient", "staff"] as const;
 export type ConnectionKind = typeof CONNECTION_KINDS[number];

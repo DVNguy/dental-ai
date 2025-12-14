@@ -651,6 +651,20 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/practices/:id/workflows", async (req, res) => {
+    try {
+      const validated = insertWorkflowSchema.parse({
+        ...req.body,
+        practiceId: req.params.id,
+      });
+      const workflow = await storage.upsertWorkflow(validated);
+      res.json(workflow);
+    } catch (error) {
+      console.error("Failed to upsert workflow:", error);
+      res.status(400).json({ error: "Invalid workflow data" });
+    }
+  });
+
   app.delete("/api/workflows/:id", async (req, res) => {
     try {
       await storage.deleteWorkflow(req.params.id);

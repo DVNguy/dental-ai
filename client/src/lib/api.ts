@@ -117,9 +117,14 @@ export const api = {
 
   workflows: {
     list: (practiceId: string) => fetchAPI<Workflow[]>(`/api/practices/${practiceId}/workflows`),
-    create: (practiceId: string, data: { name: string; actorType: WorkflowActorType }) =>
+    create: (practiceId: string, data: { name: string; slug: string; actorType: WorkflowActorType; source?: "builtin" | "custom" | "knowledge" }) =>
       fetchAPI<Workflow>(`/api/practices/${practiceId}/workflows`, {
         method: "POST",
+        body: JSON.stringify(data),
+      }),
+    upsert: (practiceId: string, data: { name: string; slug: string; actorType: WorkflowActorType; source?: "builtin" | "custom" | "knowledge" }) =>
+      fetchAPI<Workflow>(`/api/practices/${practiceId}/workflows`, {
+        method: "PUT",
         body: JSON.stringify(data),
       }),
     delete: (id: string) => fetchAPI<void>(`/api/workflows/${id}`, {

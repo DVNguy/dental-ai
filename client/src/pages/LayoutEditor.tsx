@@ -258,9 +258,9 @@ export default function LayoutEditor() {
     }
   }, [workflowAnalysis]);
 
-  const createWorkflowMutation = useMutation({
-    mutationFn: (data: { name: string; actorType: "patient" | "staff" | "instruments" }) =>
-      api.workflows.create(practiceId!, data),
+  const upsertWorkflowMutation = useMutation({
+    mutationFn: (data: { name: string; slug: string; actorType: "patient" | "staff" | "instruments"; source?: "builtin" | "custom" | "knowledge" }) =>
+      api.workflows.upsert(practiceId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workflows", practiceId] });
     },
@@ -311,15 +311,20 @@ export default function LayoutEditor() {
     if (
       practiceId && 
       !isWorkflowsLoading &&
-      workflows.length === 0 && 
-      !createWorkflowMutation.isPending &&
+      rawWorkflows.length === 0 && 
+      !upsertWorkflowMutation.isPending &&
       !hasCreatedDefaultWorkflow.current
     ) {
       hasCreatedDefaultWorkflow.current = true;
       lastSeededPracticeId.current = practiceId;
-      createWorkflowMutation.mutate({ name: "Neupatient (Patient Flow)", actorType: "patient" });
+      upsertWorkflowMutation.mutate({ 
+        name: "Neupatient (Patient Flow)", 
+        slug: "neupatient-patient-flow",
+        actorType: "patient",
+        source: "builtin"
+      });
     }
-  }, [practiceId, workflows.length, isWorkflowsLoading, createWorkflowMutation.isPending]);
+  }, [practiceId, rawWorkflows.length, isWorkflowsLoading, upsertWorkflowMutation.isPending]);
 
   const getCanvasBoundsM = useCallback(() => {
     if (canvasRef.current) {
@@ -717,15 +722,48 @@ export default function LayoutEditor() {
         <div className="flex items-center gap-2">
           {workflows.length > 0 && (
             <Select value={selectedWorkflowId || ""} onValueChange={setSelectedWorkflowId}>
-              <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="select-workflow">
+              <SelectTrigger className="h-8 w-[180px] text-xs" data-testid="select-workflow">
                 <SelectValue placeholder="Workflow wählen" />
               </SelectTrigger>
               <SelectContent>
-                {workflows.map(wf => (
-                  <SelectItem key={wf.id} value={wf.id} className="text-xs">
-                    {wf.name}
-                  </SelectItem>
-                ))}
+                {(() => {
+                  const grouped = workflows.reduce((acc, wf) => {
+                    const key = wf.actorType || 'patient';
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(wf);
+                    return acc;
+                  }, {} as Record<string, typeof workflows>);
+                  
+                  const sortGroup = (items: typeof workflows) => 
+                    [...items].sort((a, b) => {
+                      if (a.source === 'builtin' && b.source !== 'builtin') return -1;
+                      if (a.source !== 'builtin' && b.source === 'builtin') return 1;
+                      return a.name.localeCompare(b.name, 'de');
+                    });
+                  
+                  const groupLabels: Record<string, string> = {
+                    patient: t("workflow.groupPatient", "Patientenflüsse"),
+                    staff: t("workflow.groupStaff", "Mitarbeiterflüsse"),
+                    instruments: t("workflow.groupInstruments", "Instrumente/Sterilisation"),
+                  };
+                  
+                  const groupOrder = ['patient', 'staff', 'instruments'];
+                  
+                  return groupOrder.filter(g => grouped[g]?.length).map((groupKey, gi) => (
+                    <div key={groupKey}>
+                      {gi > 0 && <div className="h-px bg-border my-1" />}
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                        {groupLabels[groupKey]}
+                      </div>
+                      {sortGroup(grouped[groupKey]).map(wf => (
+                        <SelectItem key={wf.id} value={wf.id} className="text-xs pl-4" data-testid={`workflow-item-${wf.slug || wf.id}`}>
+                          {wf.name}
+                          {wf.source === 'builtin' && <span className="ml-1 text-[10px] text-muted-foreground">(Standard)</span>}
+                        </SelectItem>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </SelectContent>
             </Select>
           )}
