@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "@/lib/utils";
+import { cn, dedupeByKey, slugify } from "@/lib/utils";
 import { usePractice } from "@/contexts/PracticeContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -113,6 +113,7 @@ export default function LayoutEditor() {
   const widthDebounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const heightDebounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingRoomIdRef = useRef<string | null>(null);
+  const hasCreatedDefaultWorkflow = useRef(false);
   
   const ROOM_TYPES = [
     { id: "reception", label: t("rooms.reception"), color: "bg-blue-100 border-blue-300", w: 3, h: 2 },
@@ -149,11 +150,23 @@ export default function LayoutEditor() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: workflows = [] } = useQuery({
+  const { data: rawWorkflows = [], isLoading: isWorkflowsLoading } = useQuery({
     queryKey: ["workflows", practiceId],
     queryFn: () => api.workflows.list(practiceId!),
     enabled: !!practiceId,
   });
+  
+  const workflows = useMemo(() => {
+    const deduped = dedupeByKey(rawWorkflows, wf => wf.name);
+    if (process.env.NODE_ENV === 'development' && rawWorkflows.length !== deduped.length) {
+      console.warn('[Workflow Dedup]', {
+        total: rawWorkflows.length,
+        unique: deduped.length,
+        duplicates: rawWorkflows.length - deduped.length,
+      });
+    }
+    return deduped;
+  }, [rawWorkflows]);
 
   const activeWorkflow = workflows.find(w => w.id === selectedWorkflowId) || workflows[0];
   
@@ -246,10 +259,17 @@ export default function LayoutEditor() {
   });
 
   useEffect(() => {
-    if (practiceId && workflows.length === 0 && !createWorkflowMutation.isPending) {
+    if (
+      practiceId && 
+      !isWorkflowsLoading &&
+      workflows.length === 0 && 
+      !createWorkflowMutation.isPending &&
+      !hasCreatedDefaultWorkflow.current
+    ) {
+      hasCreatedDefaultWorkflow.current = true;
       createWorkflowMutation.mutate({ name: "Neupatient (Patient Flow)", actorType: "patient" });
     }
-  }, [practiceId, workflows.length]);
+  }, [practiceId, workflows.length, isWorkflowsLoading, createWorkflowMutation.isPending]);
 
   const getCanvasBoundsM = useCallback(() => {
     if (canvasRef.current) {
