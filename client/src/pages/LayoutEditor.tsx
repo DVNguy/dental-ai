@@ -633,6 +633,29 @@ export default function LayoutEditor() {
             }}
           />
           
+          <div 
+            className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm shadow-lg rounded-lg border px-3 py-2 z-40 pointer-events-none"
+            data-testid="legend-distance"
+          >
+            <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("layout.distanceLegend", "Distanz-Klassen")}
+            </div>
+            <div className="flex items-center gap-3 text-[10px]">
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="text-muted-foreground">Kurz 0–3m</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-muted-foreground">Mittel 3–8m</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                <span className="text-muted-foreground">Lang &gt;8m</span>
+              </div>
+            </div>
+          </div>
+          
           {efficiencyData && (
             <div 
               className="absolute bottom-4 right-4 w-64 bg-background/95 backdrop-blur-sm shadow-xl rounded-xl border p-3 z-40 pointer-events-auto"
@@ -790,6 +813,15 @@ export default function LayoutEditor() {
                       </div>
                     )}
                   </div>
+                  
+                  {connectMode && (
+                    <>
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm opacity-60 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm opacity-60 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm opacity-60 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm opacity-60 group-hover:opacity-100 transition-opacity" />
+                    </>
+                  )}
                 </motion.div>
               );
             })}

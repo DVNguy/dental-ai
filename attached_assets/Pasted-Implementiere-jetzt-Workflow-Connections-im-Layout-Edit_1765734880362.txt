@@ -1,0 +1,50 @@
+Implementiere jetzt Workflow Connections im Layout Editor (client/src/pages/LayoutEditor.tsx) mit moderner UI.
+
+Requirements:
+1) Lade Verbindungen per react-query:
+- queryKey: ["workflow-connections", practiceId]
+- nutze api.workflows.listConnections(practiceId)
+
+2) UI: “Connect Mode” Toggle
+- In Header rechts einen Toggle/Button: “Verbinden”
+- Wenn Connect Mode aktiv:
+  a) Räume bleiben dragbar (aber Verbindung starten soll nicht drag blockieren)
+  b) Zeige auf jedem Raum 4 kleine “Ports” (oben/unten/links/rechts) beim Hover oder wenn Connect Mode an ist
+  c) User startet Verbindung per mousedown auf Port → zieht zur Ziel-Box → mouseup auf Ziel-Box erstellt Verbindung
+  d) Während Drag: zeige Preview-Bezierlinie zum Cursor
+
+3) Linien-Rendering:
+- Lege ein <svg> Overlay über die Canvas-Fläche (absolute inset-0)
+- Für jede Connection rendere ein <path> mit cubic bezier:
+  - StartAnchor: Mitte der passenden Seite von fromRoom (die Seite, die Richtung toRoom zeigt)
+  - EndAnchor: Mitte der passenden Seite von toRoom
+  - Control Points so wählen, dass die Kurve “modern” aussieht:
+    z.B. handleOffset = clamp(distance * 0.3, 40, 160)
+- Optional: arrow marker-end
+
+4) Interaction:
+- Klick auf eine Linie selektiert sie (highlight)
+- Delete Button in einem kleinen Popover oder in der Sidepanel: “Verbindung löschen”
+- weight und kind erstmal default (patient, weight=1) – UI dafür kann später kommen
+
+5) Meter statt px:
+- Ersetze in UI Labels, die px zeigen (z.B. im Room-Type-Button und im Selected-Room Panel) durch virtuelle Meter:
+  - Zeige z.B. “3.0 m × 3.0 m” statt “120px × 120px”
+  - Nutze pxToVirtualM helper
+- Zeige zusätzlich eine kleine Legende unten links:
+  - Kurz ~ 0–3 m, Mittel ~ 3–8 m, Lang > 8 m (virtuelle m)
+
+6) Performance:
+- Keine API Storms: Beim Erstellen nur 1 POST.
+- Beim Room Drag keine zusätzlichen Calls (bestehendes Verhalten ok).
+- Linien sollen sich sofort mitbewegen (nur aus Rooms State rechnen).
+
+Regeln:
+- Minimal-invasive Änderungen.
+- Kein neuer UI-Lib Import; nutze React + SVG + vorhandene Komponenten.
+- Jede Änderung: kurze Erklärung + betroffene Dateien + wie testen (1–2 manuelle Tests).
+
+Akzeptanztests:
+- Verbindung erstellen: Port -> ziehen -> Zielraum -> Verbindung bleibt sichtbar nach Reload.
+- Räume verschieben: Linie folgt live, ohne Delay.
+- Selected room zeigt Meterwerte.
