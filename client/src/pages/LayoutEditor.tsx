@@ -573,7 +573,7 @@ export default function LayoutEditor() {
             value={currentFloor.toString()} 
             onValueChange={(val) => setCurrentFloor(parseInt(val))}
           >
-            <SelectTrigger className="h-8 w-[100px] text-xs" data-testid="select-floor">
+            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="select-floor">
               <Layers className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
@@ -584,25 +584,19 @@ export default function LayoutEditor() {
             </SelectContent>
           </Select>
           
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={connectMode ? "default" : "outline"}
-                size="icon"
-                onClick={toggleConnectMode}
-                className={cn(
-                  "h-8 w-8",
-                  connectMode && "bg-primary text-primary-foreground"
-                )}
-                data-testid="button-connect-mode"
-              >
-                <Link2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {connectMode ? t("editor.connectModeActive", "Verbinden aktiv") : t("editor.connectMode", "Verbinden")}
-            </TooltipContent>
-          </Tooltip>
+          <Button
+            variant={connectMode ? "default" : "outline"}
+            size="sm"
+            onClick={toggleConnectMode}
+            className={cn(
+              "h-8 px-3",
+              connectMode && "bg-primary text-primary-foreground"
+            )}
+            data-testid="button-connect-mode"
+          >
+            <Link2 className="h-4 w-4 mr-1.5" />
+            {connectMode ? t("editor.connectModeActive", "Aktiv") : t("editor.connectMode", "Verbinden")}
+          </Button>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -929,18 +923,6 @@ export default function LayoutEditor() {
             className="absolute inset-0 w-full h-full pointer-events-none z-30"
             data-testid="svg-connections"
           >
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-              >
-                <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
-              </marker>
-            </defs>
             {connectionArrows.map(arrow => (
               <g key={arrow.id} data-testid={`connection-${arrow.id}`}>
                 <path
@@ -950,8 +932,6 @@ export default function LayoutEditor() {
                   strokeLinecap="round"
                   fill="none"
                   className="transition-all duration-200"
-                  style={{ color: arrow.distanceColor }}
-                  markerEnd="url(#arrowhead)"
                 />
                 {!connectMode && (
                   <g transform={`translate(${arrow.midX}, ${arrow.midY})`}>
