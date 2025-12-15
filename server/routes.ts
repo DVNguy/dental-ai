@@ -25,6 +25,16 @@ import {
 } from "./ai/artifactBenchmarks";
 import { getArtifacts } from "./ai/artifactService";
 import { z } from "zod";
+import {
+  authRouter,
+  requireAuth,
+  requirePracticeAccess,
+  requireRoomAccess,
+  requireStaffAccess,
+  requireWorkflowAccess,
+  requireConnectionAccess,
+  requireStepAccess,
+} from "./auth";
 
 // ... deine existierenden Imports (Express, http, storage, schema, etc.) ...
 // NEU: Imports für den Consultant Bot
@@ -41,6 +51,14 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  app.use("/api/auth", authRouter);
+
+  app.use("/api", (req, res, next) => {
+    if (req.path.startsWith("/auth")) return next();
+    if (req.path === "/debug/status") return next();
+    return requireAuth(req, res, next);
+  });
+
   app.get("/api/debug/status", async (req, res) => {
     const isDebugEnabled = process.env.DEBUG_STATUS === "true" || process.env.NODE_ENV !== "production";
     if (!isDebugEnabled) {
@@ -59,7 +77,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/practices/:id", async (req, res) => {
+  app.get("/api/practices/:id", requirePracticeAccess, async (req, res) => {
     try {
       const practice = await storage.getPractice(req.params.id);
       if (!practice) {
@@ -78,14 +96,17 @@ export async function registerRoutes(
   app.post("/api/practices", async (req, res) => {
     try {
       const validated = insertPracticeSchema.parse(req.body);
-      const practice = await storage.createPractice(validated);
+      const practice = await storage.createPractice({
+        ...validated,
+        ownerId: req.session.userId,
+      });
       res.json(practice);
     } catch (error) {
       res.status(400).json({ error: "Invalid practice data" });
     }
   });
 
-  app.put("/api/practices/:id/budget", async (req, res) => {
+  app.put("/api/practices/:id/budget", requirePracticeAccess, async (req, res) => {
     try {
       const { budget } = req.body;
       if (typeof budget !== "number") {
@@ -106,7 +127,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/practices/:id/layout-efficiency", async (req, res) => {
+  app.get("/api/practices/:id/layout-efficiency", requirePracticeAccess, async (req, res) => {
     try {
       const rooms = await storage.getRoomsByPracticeId(req.params.id);
       const breakdown = await calculateLayoutEfficiencyBreakdown(rooms);
@@ -177,7 +198,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/practices/:id/rooms", async (req, res) => {
+  app.get("/api/practices/:id/rooms", requirePracticeAccess, async (req, res) => {
     try {
       const rooms = await storage.getRoomsByPracticeId(req.params.id);
       res.json(rooms);
@@ -186,7 +207,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/practices/:id/rooms", async (req, res) => {
+  app.post("/api/practices/:id/rooms", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertRoomSchema.parse({
         ...req.body,
@@ -199,7 +220,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/rooms/:id", async (req, res) => {
+  app.put("/api/rooms/:id", requireRoomAccess, async (req, res) => {
     try {
       const room = await storage.updateRoom(req.params.id, req.body);
       if (!room) {
@@ -211,7 +232,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/rooms/:id", async (req, res) => {
+  app.delete("/api/rooms/:id", requireRoomAccess, async (req, res) => {
     try {
       await storage.deleteRoom(req.params.id);
       res.json({ success: true });
@@ -220,7 +241,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/practices/:id/staff", async (req, res) => {
+  app.get("/api/practices/:id/staff", requirePracticeAccess, async (req, res) => {
     try {
       const staff = await storage.getStaffByPracticeId(req.params.id);
       res.json(staff);
@@ -229,7 +250,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/practices/:id/staff", async (req, res) => {
+  app.post("/api/practices/:id/staff", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertStaffSchema.parse({
         ...req.body,
@@ -242,7 +263,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/staff/:id", async (req, res) => {
+  app.put("/api/staff/:id", requireStaffAccess, async (req, res) => {
     try {
       const staffMember = await storage.updateStaff(req.params.id, req.body);
       if (!staffMember) {
@@ -254,7 +275,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/staff/:id", async (req, res) => {
+  app.delete("/api/staff/:id", requireStaffAccess, async (req, res) => {
     try {
       await storage.deleteStaff(req.params.id);
       res.json({ success: true });
@@ -263,7 +284,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/simulations", async (req, res) => {
+  app.post("/api/simulations", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertSimulationSchema.parse(req.body);
       const simulation = await storage.createSimulation(validated);
@@ -273,7 +294,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/practices/:id/simulations", async (req, res) => {
+  app.get("/api/practices/:id/simulations", requirePracticeAccess, async (req, res) => {
     try {
       const simulations = await storage.getSimulationsByPracticeId(
         req.params.id,
@@ -290,7 +311,7 @@ export async function registerRoutes(
     operatingHours: z.number().min(1).max(24),
   });
 
-  app.post("/api/simulations/run", async (req, res) => {
+  app.post("/api/simulations/run", requirePracticeAccess, async (req, res) => {
     try {
       const { practiceId, patientVolume, operatingHours } =
         runSimulationSchema.parse(req.body);
@@ -333,7 +354,7 @@ export async function registerRoutes(
     operatingHours: z.number().min(1).max(24).optional().default(8),
   });
 
-  app.post("/api/ai/analyze-layout", async (req, res) => {
+  app.post("/api/ai/analyze-layout", requirePracticeAccess, async (req, res) => {
     try {
       const { practiceId, operatingHours } = analyzeLayoutSchema.parse(
         req.body,
@@ -364,7 +385,7 @@ export async function registerRoutes(
     question: z.string().optional(),
   });
 
-  app.post("/api/ai/recommend", async (req, res) => {
+  app.post("/api/ai/recommend", requirePracticeAccess, async (req, res) => {
     try {
       const { practiceId, question } = recommendSchema.parse(req.body);
 
@@ -647,7 +668,7 @@ export async function registerRoutes(
   // ---------------------------------------------------------
 
   // Workflow endpoints
-  app.get("/api/practices/:id/workflows", async (req, res) => {
+  app.get("/api/practices/:id/workflows", requirePracticeAccess, async (req, res) => {
     try {
       const workflows = await storage.getWorkflowsByPracticeId(req.params.id);
       res.json(workflows);
@@ -656,7 +677,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/practices/:id/workflows", async (req, res) => {
+  app.post("/api/practices/:id/workflows", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertWorkflowSchema.parse({
         ...req.body,
@@ -669,7 +690,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/practices/:id/workflows", async (req, res) => {
+  app.put("/api/practices/:id/workflows", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertWorkflowSchema.parse({
         ...req.body,
@@ -683,7 +704,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/workflows/:id", async (req, res) => {
+  app.delete("/api/workflows/:id", requireWorkflowAccess, async (req, res) => {
     try {
       await storage.deleteWorkflow(req.params.id);
       res.json({ success: true });
@@ -693,7 +714,7 @@ export async function registerRoutes(
   });
 
   // Workflow Steps endpoints (workflow-specific ordered steps)
-  app.get("/api/workflows/:id/steps", async (req, res) => {
+  app.get("/api/workflows/:id/steps", requireWorkflowAccess, async (req, res) => {
     try {
       const steps = await storage.getWorkflowSteps(req.params.id);
       res.json(steps);
@@ -702,7 +723,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workflows/:id/steps", async (req, res) => {
+  app.post("/api/workflows/:id/steps", requireWorkflowAccess, async (req, res) => {
     try {
       const maxIndex = await storage.getMaxStepIndex(req.params.id);
       const validated = insertWorkflowStepSchema.parse({

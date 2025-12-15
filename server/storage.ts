@@ -111,6 +111,13 @@ export interface IStorage {
   getMaxStepIndex(workflowId: string): Promise<number>;
   
   getDebugStats(): Promise<DebugStats>;
+
+  getPracticesByOwnerId(ownerId: string): Promise<Practice[]>;
+  getRoomWithPractice(roomId: string): Promise<{room: Room, practice: Practice} | undefined>;
+  getStaffWithPractice(staffId: string): Promise<{staff: Staff, practice: Practice} | undefined>;
+  getWorkflowWithPractice(workflowId: string): Promise<{workflow: Workflow, practice: Practice} | undefined>;
+  getConnectionWithPractice(connectionId: string): Promise<{connection: WorkflowConnection, practice: Practice} | undefined>;
+  getStepWithPractice(stepId: string): Promise<{step: WorkflowStep, practice: Practice} | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -434,6 +441,52 @@ export class DatabaseStorage implements IStorage {
         count: Number(row.count),
       })),
     };
+  }
+
+  async getPracticesByOwnerId(ownerId: string): Promise<Practice[]> {
+    return await db.select().from(practices).where(eq(practices.ownerId, ownerId));
+  }
+
+  async getRoomWithPractice(roomId: string): Promise<{room: Room, practice: Practice} | undefined> {
+    const result = await db.select().from(rooms).where(eq(rooms.id, roomId));
+    if (!result[0]) return undefined;
+    const practice = await this.getPractice(result[0].practiceId);
+    if (!practice) return undefined;
+    return { room: result[0], practice };
+  }
+
+  async getStaffWithPractice(staffId: string): Promise<{staff: Staff, practice: Practice} | undefined> {
+    const result = await db.select().from(staff).where(eq(staff.id, staffId));
+    if (!result[0]) return undefined;
+    const practice = await this.getPractice(result[0].practiceId);
+    if (!practice) return undefined;
+    return { staff: result[0], practice };
+  }
+
+  async getWorkflowWithPractice(workflowId: string): Promise<{workflow: Workflow, practice: Practice} | undefined> {
+    const result = await db.select().from(workflows).where(eq(workflows.id, workflowId));
+    if (!result[0]) return undefined;
+    const practice = await this.getPractice(result[0].practiceId);
+    if (!practice) return undefined;
+    return { workflow: result[0], practice };
+  }
+
+  async getConnectionWithPractice(connectionId: string): Promise<{connection: WorkflowConnection, practice: Practice} | undefined> {
+    const result = await db.select().from(workflowConnections).where(eq(workflowConnections.id, connectionId));
+    if (!result[0]) return undefined;
+    const practice = await this.getPractice(result[0].practiceId);
+    if (!practice) return undefined;
+    return { connection: result[0], practice };
+  }
+
+  async getStepWithPractice(stepId: string): Promise<{step: WorkflowStep, practice: Practice} | undefined> {
+    const result = await db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId));
+    if (!result[0]) return undefined;
+    const workflow = await db.select().from(workflows).where(eq(workflows.id, result[0].workflowId));
+    if (!workflow[0]) return undefined;
+    const practice = await this.getPractice(workflow[0].practiceId);
+    if (!practice) return undefined;
+    return { step: result[0], practice };
   }
 }
 
