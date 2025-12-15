@@ -49,11 +49,9 @@ export function PracticeProvider({ children }: { children: ReactNode }) {
         const authUser = await api.auth.me();
         setUser(authUser);
         
-        const storedId = localStorage.getItem("practiceId");
-        if (storedId) {
-          setPracticeId(storedId);
-        } else {
-          createDefaultPractice.mutate();
+        if (authUser.practiceId) {
+          setPracticeId(authUser.practiceId);
+          localStorage.setItem("practiceId", authUser.practiceId);
         }
         setIsAuthChecking(false);
       } catch {

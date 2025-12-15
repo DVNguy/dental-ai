@@ -22,7 +22,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
 export interface AuthUser {
   id: string;
-  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  practiceId: string;
 }
 
 export const api = {
@@ -41,7 +45,7 @@ export const api = {
       fetchAPI<{ success: boolean }>("/api/auth/logout", {
         method: "POST",
       }),
-    me: () => fetchAPI<AuthUser>("/api/auth/me"),
+    me: () => fetchAPI<{ user: AuthUser; practiceId: string }>("/api/me").then(res => ({ ...res.user, practiceId: res.practiceId })),
   },
 
   practices: {
