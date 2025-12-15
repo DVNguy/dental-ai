@@ -1,6 +1,50 @@
 import { Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 
+type ResourceFetcher<T> = (id: string) => Promise<T | null>;
+type PracticeIdExtractor<T> = (resource: T) => string;
+
+interface ResourceGuardConfig<T> {
+  fetcher: ResourceFetcher<T>;
+  resourceName: string;
+  extractPracticeId: PracticeIdExtractor<T>;
+}
+
+function createResourceGuard<T>(config: ResourceGuardConfig<T>) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const resourceId = req.params.id;
+    if (!resourceId) {
+      return next();
+    }
+
+    const user = req.user as any;
+    if (!user?.claims?.sub) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const userId = user.claims.sub;
+    const practices = await storage.getPracticesByOwnerId(userId);
+
+    if (practices.length === 0) {
+      return res.status(403).json({ error: "No practice in session" });
+    }
+
+    const sessionPracticeId = practices[0].id;
+
+    const result = await config.fetcher(resourceId);
+    if (!result) {
+      return res.status(404).json({ error: `${config.resourceName} not found` });
+    }
+
+    const resourcePracticeId = config.extractPracticeId(result);
+    if (resourcePracticeId !== sessionPracticeId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    next();
+  };
+}
+
 export async function requirePracticeAccess(req: Request, res: Response, next: NextFunction) {
   const user = req.user as any;
   if (!user?.claims?.sub) {
@@ -39,162 +83,47 @@ export async function requirePracticeAccess(req: Request, res: Response, next: N
   next();
 }
 
-export async function requireRoomAccess(req: Request, res: Response, next: NextFunction) {
-  const roomId = req.params.id;
-  if (!roomId) {
-    return next();
-  }
+export const requireRoomAccess = createResourceGuard({
+  fetcher: async (id: string) => {
+    const result = await storage.getRoomWithPractice(id);
+    return result?.room ?? null;
+  },
+  resourceName: "Room",
+  extractPracticeId: (room) => room.practiceId,
+});
 
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice in session" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
+export const requireStaffAccess = createResourceGuard({
+  fetcher: async (id: string) => {
+    const result = await storage.getStaffWithPractice(id);
+    return result?.staff ?? null;
+  },
+  resourceName: "Staff member",
+  extractPracticeId: (staff) => staff.practiceId,
+});
 
-  const result = await storage.getRoomWithPractice(roomId);
-  if (!result) {
-    return res.status(404).json({ error: "Room not found" });
-  }
+export const requireWorkflowAccess = createResourceGuard({
+  fetcher: async (id: string) => {
+    const result = await storage.getWorkflowWithPractice(id);
+    return result?.workflow ?? null;
+  },
+  resourceName: "Workflow",
+  extractPracticeId: (workflow) => workflow.practiceId,
+});
 
-  if (result.room.practiceId !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
+export const requireConnectionAccess = createResourceGuard({
+  fetcher: async (id: string) => {
+    const result = await storage.getConnectionWithPractice(id);
+    return result?.connection ?? null;
+  },
+  resourceName: "Connection",
+  extractPracticeId: (connection) => connection.practiceId,
+});
 
-  next();
-}
-
-export async function requireStaffAccess(req: Request, res: Response, next: NextFunction) {
-  const staffId = req.params.id;
-  if (!staffId) {
-    return next();
-  }
-
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice in session" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
-
-  const result = await storage.getStaffWithPractice(staffId);
-  if (!result) {
-    return res.status(404).json({ error: "Staff member not found" });
-  }
-
-  if (result.staff.practiceId !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  next();
-}
-
-export async function requireWorkflowAccess(req: Request, res: Response, next: NextFunction) {
-  const workflowId = req.params.id;
-  if (!workflowId) {
-    return next();
-  }
-
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice in session" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
-
-  const result = await storage.getWorkflowWithPractice(workflowId);
-  if (!result) {
-    return res.status(404).json({ error: "Workflow not found" });
-  }
-
-  if (result.workflow.practiceId !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  next();
-}
-
-export async function requireConnectionAccess(req: Request, res: Response, next: NextFunction) {
-  const connectionId = req.params.id;
-  if (!connectionId) {
-    return next();
-  }
-
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice in session" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
-
-  const result = await storage.getConnectionWithPractice(connectionId);
-  if (!result) {
-    return res.status(404).json({ error: "Connection not found" });
-  }
-
-  if (result.connection.practiceId !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  next();
-}
-
-export async function requireStepAccess(req: Request, res: Response, next: NextFunction) {
-  const stepId = req.params.id;
-  if (!stepId) {
-    return next();
-  }
-
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice in session" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
-
-  const result = await storage.getStepWithPractice(stepId);
-  if (!result) {
-    return res.status(404).json({ error: "Step not found" });
-  }
-
-  if (result.practice.id !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
-  next();
-}
+export const requireStepAccess = createResourceGuard({
+  fetcher: async (id: string) => {
+    const result = await storage.getStepWithPractice(id);
+    return result ? { practiceId: result.practice.id } : null;
+  },
+  resourceName: "Step",
+  extractPracticeId: (result) => result.practiceId,
+});

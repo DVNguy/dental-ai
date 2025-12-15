@@ -40,7 +40,7 @@ import { aiRateLimiter, aiBudgetGuard, RATE_LIMIT_CONFIG } from "./rateLimit";
 // NEU: Imports für den Consultant Bot
 import { OpenAI } from "openai";
 import { tavily } from "@tavily/core";
-import { DENTAL_BENCHMARKS } from "./benchmark"; // Wichtig: Singular "./benchmark", wie in deinem Screenshot
+import { DENTAL_BENCHMARKS } from "./ai/benchmarks";
 
 // NEU: Clients initialisieren
 // Stelle sicher, dass diese Keys in den Replit Secrets (.env) sind!

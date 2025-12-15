@@ -1,3 +1,45 @@
+export const DENTAL_BENCHMARKS = {
+  financial: {
+    min_revenue_per_hour: 300.00,
+    target_overhead_ratio: 0.60,
+    collection_ratio: 0.98,
+    skonto_max: 0.03,
+    break_even_crowns_cadcam: 30,
+    marketing_budget_percent: 0.05,
+    min_case_acceptance: 0.75
+  },
+  tax_rates: {
+    heilbehandlung: 0.00,
+    zahntechnik_eigen: 0.07,
+    kosmetik_shop: 0.19,
+    bagatellgrenze_geschenke: 5.00,
+    geschenke_steuerfrei_p_a: 50.00
+  },
+  standard_times_min: {
+    exam_new_patient: 60,
+    prophylaxis_pzr: 50,
+    prep_crown: 75,
+    endo_root_canal: 105,
+    extraction_simple: 25,
+    implant_placement: 90,
+    scan_intraoral: 5
+  },
+  operational_limits: {
+    max_waiting_time: 15,
+    inventory_turnover: 5,
+    no_show_rate_max: 0.05,
+    hygiene_rebooking: 0.90,
+    oee_target: 0.85
+  },
+  structural: {
+    room_size_treatment_sqm: 12.0,
+    room_size_prophy_sqm: 10.0,
+    staff_ratio_zfa_per_dentist: 1.5,
+    chairs_per_dentist: 2,
+    steri_capacity_per_hour: 6
+  }
+};
+
 export interface RoomSizeStandard {
   minSqM: number;
   maxSqM: number;
