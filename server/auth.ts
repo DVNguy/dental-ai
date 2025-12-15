@@ -1,14 +1,21 @@
 import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
 
 export const authRouter = Router();
 
 const registerSchema = z.object({
   username: z.string().min(3).max(50),
+  email: z.string().email(),
   password: z.string().min(6).max(100),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 const loginSchema = z.object({
@@ -16,17 +23,43 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+const requestPasswordResetSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(32),
+  password: z.string().min(6).max(100),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+const passwordResetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many password reset requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 authRouter.post("/register", async (req: Request, res: Response) => {
   try {
-    const { username, password } = registerSchema.parse(req.body);
+    const { username, email, password } = registerSchema.parse(req.body);
 
-    const existing = await storage.getUserByUsername(username);
-    if (existing) {
+    const existingUsername = await storage.getUserByUsername(username);
+    if (existingUsername) {
       return res.status(400).json({ error: "Username already exists" });
     }
 
+    const existingEmail = await storage.getUserByEmail(email);
+    if (existingEmail) {
+      return res.status(400).json({ error: "Email already registered" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await storage.createUser({ username, password: hashedPassword });
+    const user = await storage.createUser({ username, email, password: hashedPassword });
 
     const practice = await storage.createPractice({
       name: `Praxis ${username}`,
@@ -40,6 +73,10 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     res.json({ id: user.id, username: user.username, practiceId: practice.id });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const passwordMismatch = error.errors.find(e => e.path.includes("confirmPassword"));
+      if (passwordMismatch) {
+        return res.status(400).json({ error: "Passwords do not match" });
+      }
       return res.status(400).json({ error: "Invalid registration data" });
     }
     console.error("Registration error:", error);
@@ -107,6 +144,91 @@ authRouter.get("/me", async (req: Request, res: Response) => {
   }
 
   res.json({ id: user.id, username: user.username, practiceId: practiceId || null });
+});
+
+authRouter.post("/request-password-reset", passwordResetRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email } = requestPasswordResetSchema.parse(req.body);
+
+    const user = await storage.getUserByEmail(email);
+    
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      });
+
+      const resetUrl = `${req.protocol}://${req.get("host")}/reset-password?token=${token}`;
+      console.log(`[PASSWORD RESET] Reset link for ${email}: ${resetUrl}`);
+    }
+
+    res.json({ 
+      message: "If an account exists with this email, a password reset link has been sent." 
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+    console.error("Password reset request error:", error);
+    res.status(500).json({ error: "Password reset request failed" });
+  }
+});
+
+authRouter.post("/reset-password", async (req: Request, res: Response) => {
+  try {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const resetToken = await storage.getValidPasswordResetToken(tokenHash);
+
+    if (!resetToken) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await storage.updateUserPassword(resetToken.userId, hashedPassword);
+    await storage.markPasswordResetTokenUsed(resetToken.id);
+
+    await storage.deleteExpiredPasswordResetTokens();
+
+    res.json({ message: "Password has been reset successfully" });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const passwordMismatch = error.errors.find(e => e.path.includes("confirmPassword"));
+      if (passwordMismatch) {
+        return res.status(400).json({ error: "Passwords do not match" });
+      }
+      return res.status(400).json({ error: "Invalid reset data" });
+    }
+    console.error("Password reset error:", error);
+    res.status(500).json({ error: "Password reset failed" });
+  }
+});
+
+authRouter.get("/verify-reset-token", async (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+    if (!token || token.length < 32) {
+      return res.status(400).json({ valid: false, error: "Invalid token" });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const resetToken = await storage.getValidPasswordResetToken(tokenHash);
+
+    if (!resetToken) {
+      return res.status(400).json({ valid: false, error: "Invalid or expired token" });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error("Token verification error:", error);
+    res.status(500).json({ valid: false, error: "Verification failed" });
+  }
 });
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {

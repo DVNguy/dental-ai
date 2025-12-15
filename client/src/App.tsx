@@ -10,6 +10,7 @@ import Knowledge from "@/pages/Knowledge";
 import Playbooks from "@/pages/Playbooks";
 import Debug from "@/pages/Debug";
 import Auth from "@/pages/Auth";
+import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,6 +39,10 @@ function AppRouter() {
   
   if (location === "/auth") {
     return <Auth />;
+  }
+  
+  if (location.startsWith("/reset-password")) {
+    return <ResetPassword />;
   }
   
   return (
