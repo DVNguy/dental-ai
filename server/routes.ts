@@ -35,6 +35,7 @@ import {
   requireConnectionAccess,
   requireStepAccess,
 } from "./auth";
+import { aiRateLimiter, aiBudgetGuard, RATE_LIMIT_CONFIG } from "./rateLimit";
 
 // ... deine existierenden Imports (Express, http, storage, schema, etc.) ...
 // NEU: Imports für den Consultant Bot
@@ -58,6 +59,12 @@ export async function registerRoutes(
     if (req.path === "/debug/status") return next();
     return requireAuth(req, res, next);
   });
+
+  // Rate limiting for AI endpoints
+  // Limits: 30 req/min for authenticated users, 10 req/min for anonymous (IP-based)
+  // Budget guard is applied per-route after requirePracticeAccess sets practiceId
+  app.use("/api/ai", aiRateLimiter);
+  app.use("/api/v1/rag", aiRateLimiter);
 
   app.get("/api/debug/status", async (req, res) => {
     const isDebugEnabled = process.env.DEBUG_STATUS === "true" || process.env.NODE_ENV !== "production";
@@ -354,7 +361,7 @@ export async function registerRoutes(
     operatingHours: z.number().min(1).max(24).optional().default(8),
   });
 
-  app.post("/api/ai/analyze-layout", requirePracticeAccess, async (req, res) => {
+  app.post("/api/ai/analyze-layout", requirePracticeAccess, aiBudgetGuard, async (req, res) => {
     try {
       const { practiceId, operatingHours } = analyzeLayoutSchema.parse(
         req.body,
@@ -385,7 +392,7 @@ export async function registerRoutes(
     question: z.string().optional(),
   });
 
-  app.post("/api/ai/recommend", requirePracticeAccess, async (req, res) => {
+  app.post("/api/ai/recommend", requirePracticeAccess, aiBudgetGuard, async (req, res) => {
     try {
       const { practiceId, question } = recommendSchema.parse(req.body);
 
@@ -799,7 +806,7 @@ export async function registerRoutes(
     includeRAG: z.boolean().optional().default(false),
   });
 
-  app.post("/api/ai/analyze-workflows", requirePracticeAccess, async (req, res) => {
+  app.post("/api/ai/analyze-workflows", requirePracticeAccess, aiBudgetGuard, async (req, res) => {
     try {
       const { practiceId, includeRAG } = analyzeWorkflowsSchema.parse(req.body);
       

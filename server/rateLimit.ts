@@ -21,14 +21,6 @@ const AUTHENTICATED_LIMIT = 30; // requests per minute for logged-in users
 const ANONYMOUS_LIMIT = 10;     // requests per minute for anonymous/IP-based
 const WINDOW_MS = 60 * 1000;    // 1 minute window
 
-function getKeyGenerator(req: Request): string {
-  if (req.session?.userId) {
-    return `user:${req.session.userId}`;
-  }
-  const ip = req.ip || req.socket?.remoteAddress || "unknown";
-  return `ip:${ip}`;
-}
-
 function getMaxRequests(req: Request): number {
   return req.session?.userId ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
 }
@@ -36,18 +28,15 @@ function getMaxRequests(req: Request): number {
 export const aiRateLimiter = rateLimit({
   windowMs: WINDOW_MS,
   max: getMaxRequests,
-  keyGenerator: getKeyGenerator,
+  keyGenerator: (req: Request): string => {
+    if (req.session?.userId) {
+      return `user:${req.session.userId}`;
+    }
+    return `ip:${req.ip}`;
+  },
   standardHeaders: true,
   legacyHeaders: false,
-  message: (req: Request, res: Response) => {
-    const isAuthenticated = !!req.session?.userId;
-    const limit = isAuthenticated ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
-    return {
-      error: "Too many requests",
-      message: `Rate limit exceeded. Max ${limit} requests per minute.`,
-      retryAfter: Math.ceil(WINDOW_MS / 1000),
-    };
-  },
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
   handler: (req: Request, res: Response) => {
     const isAuthenticated = !!req.session?.userId;
     const limit = isAuthenticated ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
@@ -119,7 +108,7 @@ export function incrementAiBudget(practiceId: string): void {
 }
 
 export function aiBudgetGuard(req: Request, res: Response, next: Function): void {
-  const practiceId = req.session?.practiceId;
+  const practiceId = (req as any).practiceId || req.session?.practiceId || req.body?.practiceId;
   
   if (!practiceId) {
     return next();
@@ -137,10 +126,14 @@ export function aiBudgetGuard(req: Request, res: Response, next: Function): void
     return;
   }
   
-  incrementAiBudget(practiceId);
-  
   res.setHeader("X-AI-Budget-Remaining", budget.remaining - 1);
   res.setHeader("X-AI-Budget-Reset", new Date(budget.resetAt).toISOString());
+  
+  res.on("finish", () => {
+    if (res.statusCode >= 200 && res.statusCode < 400) {
+      incrementAiBudget(practiceId);
+    }
+  });
   
   next();
 }
