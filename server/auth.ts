@@ -28,9 +28,16 @@ authRouter.post("/register", async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await storage.createUser({ username, password: hashedPassword });
 
-    req.session.userId = user.id;
+    const practice = await storage.createPractice({
+      name: `Praxis ${username}`,
+      budget: 50000,
+      ownerId: user.id,
+    });
 
-    res.json({ id: user.id, username: user.username });
+    req.session.userId = user.id;
+    req.session.practiceId = practice.id;
+
+    res.json({ id: user.id, username: user.username, practiceId: practice.id });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: "Invalid registration data" });
@@ -54,9 +61,13 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    req.session.userId = user.id;
+    const practices = await storage.getPracticesByOwnerId(user.id);
+    const practiceId = practices.length > 0 ? practices[0].id : null;
 
-    res.json({ id: user.id, username: user.username });
+    req.session.userId = user.id;
+    req.session.practiceId = practiceId || undefined;
+
+    res.json({ id: user.id, username: user.username, practiceId });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: "Invalid login data" });
@@ -86,7 +97,16 @@ authRouter.get("/me", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "User not found" });
   }
 
-  res.json({ id: user.id, username: user.username });
+  let practiceId = req.session.practiceId;
+  if (!practiceId) {
+    const practices = await storage.getPracticesByOwnerId(user.id);
+    if (practices.length > 0) {
+      practiceId = practices[0].id;
+      req.session.practiceId = practiceId;
+    }
+  }
+
+  res.json({ id: user.id, username: user.username, practiceId: practiceId || null });
 });
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
