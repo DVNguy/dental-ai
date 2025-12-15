@@ -148,6 +148,9 @@ export const workflowConnections = pgTable("workflow_connections", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const STEP_LINE_TYPES = ["default", "critical", "optional", "automated"] as const;
+export type StepLineType = typeof STEP_LINE_TYPES[number];
+
 export const workflowSteps = pgTable("workflow_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   workflowId: varchar("workflow_id").notNull().references(() => workflows.id, { onDelete: "cascade" }),
@@ -155,6 +158,30 @@ export const workflowSteps = pgTable("workflow_steps", {
   fromRoomId: varchar("from_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
   toRoomId: varchar("to_room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
   weight: real("weight").notNull().default(1),
+  lineType: text("line_type").$type<StepLineType>().default("default"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const ARCHITECTURAL_ELEMENT_TYPES = ["door", "window"] as const;
+export type ArchitecturalElementType = typeof ARCHITECTURAL_ELEMENT_TYPES[number];
+
+export const DOOR_HINGE_SIDES = ["left", "right"] as const;
+export type DoorHingeSide = typeof DOOR_HINGE_SIDES[number];
+
+export const DOOR_OPENING_DIRECTIONS = ["in", "out"] as const;
+export type DoorOpeningDirection = typeof DOOR_OPENING_DIRECTIONS[number];
+
+export const architecturalElements = pgTable("architectural_elements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  type: text("type").notNull().$type<ArchitecturalElementType>(),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  width: integer("width").notNull(),
+  rotation: integer("rotation").notNull().default(0),
+  floor: integer("floor").notNull().default(0),
+  hinge: text("hinge").$type<DoorHingeSide>().default("left"),
+  openingDirection: text("opening_direction").$type<DoorOpeningDirection>().default("in"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -221,6 +248,11 @@ export const insertWorkflowStepSchema = createInsertSchema(workflowSteps).omit({
   createdAt: true,
 });
 
+export const insertArchitecturalElementSchema = createInsertSchema(architecturalElements).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -256,3 +288,6 @@ export type WorkflowConnection = typeof workflowConnections.$inferSelect;
 
 export type InsertWorkflowStep = z.infer<typeof insertWorkflowStepSchema>;
 export type WorkflowStep = typeof workflowSteps.$inferSelect;
+
+export type InsertArchitecturalElement = z.infer<typeof insertArchitecturalElementSchema>;
+export type ArchitecturalElement = typeof architecturalElements.$inferSelect;

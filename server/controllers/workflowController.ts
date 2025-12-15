@@ -72,6 +72,18 @@ export async function createWorkflowStep(req: Request, res: Response) {
   }
 }
 
+export async function updateWorkflowStep(req: Request, res: Response) {
+  try {
+    const step = await storage.updateWorkflowStep(req.params.id, req.body);
+    if (!step) {
+      return res.status(404).json({ error: "Workflow step not found" });
+    }
+    res.json(step);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update workflow step" });
+  }
+}
+
 export async function deleteWorkflowStep(req: Request, res: Response) {
   try {
     await storage.deleteWorkflowStep(req.params.id);

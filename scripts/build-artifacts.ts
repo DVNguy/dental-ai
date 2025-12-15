@@ -177,6 +177,32 @@ const ARTIFACT_DEFINITIONS: ArtifactDefinition[] = [
       }))
     }),
     searchTerms: ["Zone", "Bereich", "Workflow", "Patient", "Ablauf"]
+  },
+
+  // Inventory artifacts
+  {
+    module: "layout",
+    topic: "inventory_rules",
+    artifactType: "inventory_item",
+    prompt: `Extrahiere Inventar- und Ausstattungsregeln für Zahnarztpraxen.
+    Liefere JSON mit: items (Array von {item, category, dimensions: {width_cm, depth_cm, height_cm}, placement, requires[], clearance_cm, description}).
+    Kategorien: behandlung, empfang, wartezimmer, labor, lager, büro.`,
+    schema: z.object({
+      items: z.array(z.object({
+        item: z.string(),
+        category: z.string(),
+        dimensions: z.object({
+          width_cm: z.number().optional(),
+          depth_cm: z.number().optional(),
+          height_cm: z.number().optional()
+        }).optional(),
+        placement: z.string(),
+        requires: z.array(z.string()).optional(),
+        clearance_cm: z.number().optional(),
+        description: z.string()
+      }))
+    }),
+    searchTerms: ["Ausstattung", "Inventar", "Gerät", "Möbel", "Behandlungsstuhl", "Röntgen", "Sterilisator"]
   }
 ];
 

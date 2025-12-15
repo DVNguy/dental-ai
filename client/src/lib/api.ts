@@ -1,4 +1,4 @@
-import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep } from "@shared/schema";
+import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep, ArchitecturalElement, InsertArchitecturalElement, ArchitecturalElementType, StepLineType } from "@shared/schema";
 
 const API_BASE = "";
 
@@ -90,6 +90,23 @@ export const api = {
     }),
   },
 
+  elements: {
+    list: (practiceId: string) => fetchAPI<ArchitecturalElement[]>(`/api/practices/${practiceId}/elements`),
+    create: (practiceId: string, data: Omit<InsertArchitecturalElement, "practiceId">) =>
+      fetchAPI<ArchitecturalElement>(`/api/practices/${practiceId}/elements`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<Omit<InsertArchitecturalElement, "practiceId">> & { hinge?: "left" | "right"; openingDirection?: "in" | "out" }) =>
+      fetchAPI<ArchitecturalElement>(`/api/elements/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => fetchAPI<void>(`/api/elements/${id}`, {
+      method: "DELETE",
+    }),
+  },
+
   simulations: {
     run: (data: { practiceId: string; patientVolume: number; operatingHours: number }) =>
       fetchAPI<{
@@ -126,6 +143,10 @@ export const api = {
       }),
   },
 
+  benchmarks: {
+    get: () => fetchAPI<BenchmarksResponse>("/api/benchmarks"),
+  },
+
   layout: {
     efficiency: (practiceId: string) =>
       fetchAPI<LayoutEfficiencyResult>("/api/layout/efficiency", {
@@ -141,6 +162,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ query, limit }),
     }),
+    getInventoryRules: () => fetchAPI<InventoryRulesResponse>("/api/knowledge/inventory-rules"),
+    getInventory: () => fetchAPI<InventoryRulesResponse>("/api/knowledge/inventory"),
   },
 
   workflows: {
@@ -179,9 +202,14 @@ export const api = {
 
   workflowSteps: {
     list: (workflowId: string) => fetchAPI<WorkflowStep[]>(`/api/workflows/${workflowId}/steps`),
-    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; weight?: number }) =>
+    create: (workflowId: string, data: { fromRoomId: string; toRoomId: string; weight?: number; lineType?: StepLineType }) =>
       fetchAPI<WorkflowStep>(`/api/workflows/${workflowId}/steps`, {
         method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: { weight?: number; lineType?: StepLineType }) =>
+      fetchAPI<WorkflowStep>(`/api/workflow-steps/${id}`, {
+        method: "PUT",
         body: JSON.stringify(data),
       }),
     delete: (id: string) => fetchAPI<void>(`/api/workflow-steps/${id}`, {
@@ -323,4 +351,45 @@ export interface WorkflowEfficiencyResult {
     answer: string;
     sources: Array<{ docName: string; headingPath: string }>;
   };
+}
+
+export interface RoomSizeBenchmark {
+  minSqM: number;
+  maxSqM: number;
+  optimalSqM: number;
+  source: string;
+  citations: Array<{ docName: string; headingPath: string }>;
+  fromKnowledge: boolean;
+}
+
+export interface BenchmarksResponse {
+  roomSizes: Record<string, RoomSizeBenchmark>;
+  staffing: Record<string, { min: number; max: number; optimal: number; source: string }>;
+  scheduling: {
+    serviceTimes: Record<string, { min: number; max: number; optimal: number }>;
+    bufferMinutes: { value: number };
+    maxWaitTime: { value: number };
+  };
+  healthScoreWeights: Record<string, number>;
+  healthScoreFromKnowledge: boolean;
+}
+
+export interface InventoryItem {
+  item: string;
+  category: string;
+  dimensions?: {
+    width_cm?: number;
+    depth_cm?: number;
+    height_cm?: number;
+  };
+  placement: string;
+  requires?: string[];
+  clearance_cm?: number;
+  description: string;
+}
+
+export interface InventoryRulesResponse {
+  byCategory: Record<string, InventoryItem[]>;
+  citations: Array<{ docName: string; headingPath: string | null; chunkId: string }>;
+  fromKnowledge: boolean;
 }

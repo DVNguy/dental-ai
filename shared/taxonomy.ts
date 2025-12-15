@@ -4,7 +4,8 @@ export const ARTIFACT_TYPES = [
   "formula",
   "template",
   "checklist",
-  "playbook"
+  "playbook",
+  "inventory_item"
 ] as const;
 
 export type ArtifactType = typeof ARTIFACT_TYPES[number];
@@ -76,13 +77,28 @@ export interface PlaybookPayload {
   description: string;
 }
 
-export type ArtifactPayload = 
-  | BenchmarkPayload 
-  | RulePayload 
-  | FormulaPayload 
-  | ChecklistPayload 
-  | TemplatePayload 
-  | PlaybookPayload;
+export interface InventoryItemPayload {
+  item: string;
+  category: string;
+  dimensions?: {
+    width_cm?: number;
+    depth_cm?: number;
+    height_cm?: number;
+  };
+  placement: string;
+  requires?: string[];
+  clearance_cm?: number;
+  description: string;
+}
+
+export type ArtifactPayload =
+  | BenchmarkPayload
+  | RulePayload
+  | FormulaPayload
+  | ChecklistPayload
+  | TemplatePayload
+  | PlaybookPayload
+  | InventoryItemPayload;
 
 export const SAFE_DEFAULTS = {
   dashboard: {

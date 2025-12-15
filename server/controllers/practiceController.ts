@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { storage } from "../storage";
-import { insertPracticeSchema, insertRoomSchema, insertStaffSchema } from "@shared/schema";
+import { insertPracticeSchema, insertRoomSchema, insertStaffSchema, insertArchitecturalElementSchema } from "@shared/schema";
 import { calculateLayoutEfficiencyBreakdown } from "../simulation";
 import { computeLayoutEfficiency, computeWorkflowMetrics } from "../ai/layoutEfficiency";
 import { computeWorkflowAnalysis } from "../ai/advisor";
@@ -252,5 +252,62 @@ export async function deleteStaff(req: Request, res: Response) {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete staff" });
+  }
+}
+
+// Architectural Elements (Doors & Windows)
+export async function getArchitecturalElements(req: Request, res: Response) {
+  try {
+    const elements = await storage.getArchitecturalElements(req.params.id);
+    res.json(elements);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch architectural elements" });
+  }
+}
+
+export async function createArchitecturalElement(req: Request, res: Response) {
+  try {
+    const validated = insertArchitecturalElementSchema.parse({
+      ...req.body,
+      practiceId: req.params.id,
+    });
+    const element = await storage.createArchitecturalElement(validated);
+    res.json(element);
+  } catch (error) {
+    console.error("Create element error:", error);
+    res.status(400).json({ error: "Invalid architectural element data" });
+  }
+}
+
+export async function updateArchitecturalElement(req: Request, res: Response) {
+  try {
+    const { x, y, width, rotation, floor, type, hinge, openingDirection } = req.body;
+    const updates: Record<string, number | string> = {};
+    if (x !== undefined) updates.x = x;
+    if (y !== undefined) updates.y = y;
+    if (width !== undefined) updates.width = width;
+    if (rotation !== undefined) updates.rotation = rotation;
+    if (floor !== undefined) updates.floor = floor;
+    if (type !== undefined) updates.type = type;
+    if (hinge !== undefined) updates.hinge = hinge;
+    if (openingDirection !== undefined) updates.openingDirection = openingDirection;
+
+    const element = await storage.updateArchitecturalElement(req.params.id, updates);
+    if (!element) {
+      return res.status(404).json({ error: "Element not found" });
+    }
+    res.json(element);
+  } catch (error) {
+    console.error("Update element error:", error);
+    res.status(500).json({ error: "Failed to update architectural element" });
+  }
+}
+
+export async function deleteArchitecturalElement(req: Request, res: Response) {
+  try {
+    await storage.deleteArchitecturalElement(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete architectural element" });
   }
 }

@@ -47,21 +47,22 @@ export default function Knowledge() {
 
   const chatMutation = useMutation({
     mutationFn: async (question: string) => {
-      const response = await fetch("/api/ai/coach-chat", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ message: question }),
       });
-      
+
       if (!response.ok) {
         throw new Error("Fehler bei der Anfrage");
       }
-      
-      return response.json() as Promise<{ 
-        answer: string; 
-        sources: Array<{ title: string; category: string }>;
-        webResults?: Array<{ title: string; url: string }>;
-      }>;
+
+      const data = await response.json() as { response: string };
+      return {
+        answer: data.response,
+        sources: [] as Array<{ title: string; category: string }>,
+        webResults: [] as Array<{ title: string; url: string }>,
+      };
     },
     onMutate: (question) => {
       const userMessage: Message = {

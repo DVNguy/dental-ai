@@ -43,7 +43,7 @@ if (process.env.NODE_ENV === "production" && !sessionSecret) {
 }
 
 app.use(session({
-  store: new PgStore({ pool, createTableIfMissing: true }),
+  store: new PgStore({ pool, createTableIfMissing: false, tableName: 'sessions' }),
   secret: sessionSecret || "praxisflow-dev-secret-change-in-prod",
   resave: false,
   saveUninitialized: false,

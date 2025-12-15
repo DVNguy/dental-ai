@@ -45,10 +45,10 @@ function computeContentHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
-async function extractTextWithHeadings(buffer: Buffer): Promise<string> {
+async function extractTextFromDocx(buffer: Buffer): Promise<string> {
   const result = await mammoth.convertToHtml({ buffer });
   const html = result.value;
-  
+
   let text = html
     .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "\n\n# $1\n\n")
     .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "\n\n## $1\n\n")
@@ -64,8 +64,12 @@ async function extractTextWithHeadings(buffer: Buffer): Promise<string> {
     .replace(/&gt;/g, ">")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  
+
   return text;
+}
+
+function extractTextFromMarkdown(filePath: string): string {
+  return fs.readFileSync(filePath, "utf-8").trim();
 }
 
 function splitIntoHeadingBasedChunks(text: string): ChunkInfo[] {
@@ -177,6 +181,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
 
 async function ingestDocument(filePath: string, stats: IngestStats): Promise<void> {
   const fileName = path.basename(filePath);
+  const isMarkdown = fileName.endsWith(".md");
   const buffer = fs.readFileSync(filePath);
   const fileHash = computeFileHash(buffer);
   
@@ -211,7 +216,7 @@ async function ingestDocument(filePath: string, stats: IngestStats): Promise<voi
       console.log(`  🔁 Force re-ingesting: ${fileName}`);
     }
   } else {
-    const title = fileName.replace(/\.docx$/i, "").replace(/[_-]/g, " ");
+    const title = fileName.replace(/\.(docx|md)$/i, "").replace(/[_-]/g, " ");
     const [newSource] = await db.insert(knowledgeSources).values({
       title,
       fileName,
@@ -222,8 +227,10 @@ async function ingestDocument(filePath: string, stats: IngestStats): Promise<voi
     sourceId = newSource.id;
     console.log(`  ➕ New: ${fileName}`);
   }
-  
-  const text = await extractTextWithHeadings(buffer);
+
+  const text = isMarkdown
+    ? extractTextFromMarkdown(filePath)
+    : await extractTextFromDocx(buffer);
   const chunkInfos = splitIntoHeadingBasedChunks(text);
   
   for (let i = 0; i < chunkInfos.length; i++) {
@@ -276,7 +283,7 @@ async function main() {
   const startTime = Date.now();
   
   const files = fs.readdirSync(KNOWLEDGE_DOCS_DIR)
-    .filter(f => f.endsWith(".docx"))
+    .filter(f => f.endsWith(".docx") || f.endsWith(".md"))
     .map(f => path.join(KNOWLEDGE_DOCS_DIR, f));
   
   console.log(`📚 Found ${files.length} documents\n`);

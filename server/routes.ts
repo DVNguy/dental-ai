@@ -8,6 +8,7 @@ import {
   requireWorkflowAccess,
   requireConnectionAccess,
   requireStepAccess,
+  requireElementAccess,
 } from "./auth";
 import { storage } from "./storage";
 import { hashPassword } from "./auth";
@@ -92,6 +93,11 @@ export async function registerRoutes(
   app.put("/api/staff/:id", requireStaffAccess, practiceController.updateStaff);
   app.delete("/api/staff/:id", requireStaffAccess, practiceController.deleteStaff);
 
+  app.get("/api/practices/:id/elements", requirePracticeAccess, practiceController.getArchitecturalElements);
+  app.post("/api/practices/:id/elements", requirePracticeAccess, practiceController.createArchitecturalElement);
+  app.put("/api/elements/:id", requireElementAccess, practiceController.updateArchitecturalElement);
+  app.delete("/api/elements/:id", requireElementAccess, practiceController.deleteArchitecturalElement);
+
   app.post("/api/simulations", requirePracticeAccess, aiController.createSimulation);
   app.get("/api/practices/:id/simulations", requirePracticeAccess, aiController.getSimulations);
   app.post("/api/simulations/run", requirePracticeAccess, aiController.runSimulationHandler);
@@ -103,6 +109,8 @@ export async function registerRoutes(
   app.post("/api/ai/analyze-workflows", requirePracticeAccess, aiBudgetGuard, aiController.analyzeWorkflowsHandler);
 
   app.get("/api/knowledge", aiController.getKnowledgeSources);
+  app.get("/api/knowledge/inventory-rules", aiController.getInventoryRulesHandler);
+  app.get("/api/knowledge/inventory", aiController.getInventoryRulesHandler);
   app.get("/api/knowledge/:id", aiController.getKnowledgeSource);
   app.post("/api/knowledge/search", aiController.searchKnowledgeHandler);
 
@@ -119,6 +127,7 @@ export async function registerRoutes(
 
   app.get("/api/workflows/:id/steps", requireWorkflowAccess, workflowController.getWorkflowSteps);
   app.post("/api/workflows/:id/steps", requireWorkflowAccess, workflowController.createWorkflowStep);
+  app.put("/api/workflow-steps/:id", requireStepAccess, workflowController.updateWorkflowStep);
   app.delete("/api/workflow-steps/:id", requireStepAccess, workflowController.deleteWorkflowStep);
 
   app.get("/api/practices/:id/workflow-connections", requirePracticeAccess, workflowController.getConnections);

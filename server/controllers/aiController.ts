@@ -12,7 +12,7 @@ import {
   getKnowledgePoweredScheduling,
   getHealthScoreDrivers,
 } from "../ai/artifactBenchmarks";
-import { getArtifacts } from "../ai/artifactService";
+import { getArtifacts, getInventoryRulesGrouped } from "../ai/artifactService";
 import { DENTAL_BENCHMARKS } from "../ai/benchmarks";
 import { DEFAULT_LAYOUT_SCALE_PX_PER_METER } from "@shared/roomTypes";
 import { OpenAI } from "openai";
@@ -296,21 +296,78 @@ export async function getPlaybook(req: Request, res: Response) {
 }
 
 export async function smartConsultantChat(req: Request, res: Response) {
+  console.log("--- DEBUG START: Smart Consultant ---");
+  console.log("API Key OpenAI vorhanden:", !!process.env.OPENAI_API_KEY);
+  console.log("API Key Tavily vorhanden:", !!process.env.TAVILY_API_KEY);
+  console.log("Benchmarks importiert:", !!DENTAL_BENCHMARKS);
   try {
     const { message } = req.body;
     const benchmarkContext = JSON.stringify(DENTAL_BENCHMARKS, null, 2);
 
+    // Practice Awareness: Lade Praxis-Daten des Nutzers
+    let practiceContext = "Keine Praxis-Daten verfügbar.";
+    try {
+      const user = req.user as any;
+      if (user?.id) {
+        const practices = await storage.getPracticesByOwnerId(user.id);
+        const practiceId = req.body.practiceId || practices[0]?.id;
+
+        if (practiceId) {
+          const rooms = await storage.getRoomsByPracticeId(practiceId);
+          const staff = await storage.getStaffByPracticeId(practiceId);
+
+          // Räume zusammenfassen
+          const roomTypeCounts: Record<string, number> = {};
+          let totalAreaM2 = 0;
+          for (const room of rooms) {
+            roomTypeCounts[room.type] = (roomTypeCounts[room.type] || 0) + 1;
+            // Fläche berechnen (width/height in px, Standard-Skalierung ~10px/m)
+            const widthM = (room.width || 100) / 10;
+            const heightM = (room.height || 100) / 10;
+            totalAreaM2 += widthM * heightM;
+          }
+          const roomSummary = Object.entries(roomTypeCounts)
+            .map(([type, count]) => `${count}x ${type}`)
+            .join(", ");
+
+          // Personal zusammenfassen
+          const staffRoleCounts: Record<string, number> = {};
+          for (const member of staff) {
+            staffRoleCounts[member.role] = (staffRoleCounts[member.role] || 0) + 1;
+          }
+          const staffSummary = Object.entries(staffRoleCounts)
+            .map(([role, count]) => `${count}x ${role}`)
+            .join(", ");
+
+          practiceContext = `
+- **Räume:** ${rooms.length} Räume (${roomSummary || "keine Details"})
+- **Gesamtfläche:** ca. ${Math.round(totalAreaM2)} m²
+- **Personal:** ${staff.length} Mitarbeiter (${staffSummary || "keine Details"})`;
+        }
+      }
+    } catch (practiceError) {
+      console.log("Practice context konnte nicht geladen werden:", practiceError);
+    }
+
     const systemPrompt = `
-    Du bist ein hochspezialisierter KI-Unternehmensberater für Zahnarztpraxen.
+    Du bist ein erfahrener Senior-Unternehmensberater für Zahnarztpraxen (Praxis-Coach).
+    Deine Sprache ist professionell, ermutigend und auf den Punkt.
 
-    DEINE GRUNDLAGE (GROUND TRUTH):
-    Nutze für Berechnungen und Standards ZWINGEND diese Benchmarks. Rate nicht, wenn Daten hier stehen:
+    ## AKTUELLE SITUATION DES NUTZERS (REALITÄT):
+    Beziehe dich in deinen Antworten auf diese konkreten Daten, wenn sinnvoll:
+    ${practiceContext}
+
+    ## DEIN WISSEN:
+    1. Nutze die beigefügten "BENCHMARKS" als harte Fakten (Ground Truth):
     ${benchmarkContext}
+    2. Nutze das "INTERNE EXPERTENWISSEN" (RAG) für Strategien und Prozesse.
+    3. Nutze Web-Suche für aktuelle News.
 
-    INSTRUKTIONEN ZUR SUCHE:
-    - Nutze das 'web_search' Tool für aktuelle Trends (2024/2025), Gesetzesänderungen oder Marktanalysen.
-    - Nutze die Benchmarks für operative Fragen (Raumgrößen, Umsatz, Personal).
-    - Antworte professionell, präzise und immer auf Deutsch.
+    ## WICHTIGE REGELN FÜR DEINE ANTWORTEN:
+    - **Keine sichtbaren Quellenangaben:** Nenne keine Dateinamen oder Chunks im Text (z.B. KEIN "[Quelle: Marketing.docx]"). Integriere das Wissen stattdessen fließend in deine Sätze (z.B. "Gemäß bewährter Praxis-Standards...").
+    - **Tonalität:** Sprich wie ein Mentor. "Wir sollten...", "Achten Sie darauf...".
+    - **Struktur:** Nutze kurze Absätze, Fettungen für Wichtiges und Bulletpoints.
+    - **Handlungsorientiert:** Gib am Ende immer einen konkreten "Profi-Tipp" oder "Nächsten Schritt".
     `;
 
     const tools = [
@@ -375,9 +432,20 @@ export async function smartConsultantChat(req: Request, res: Response) {
     }
 
     res.json({ response: responseMessage.content });
+  } catch (error: any) {
+    console.error("KRITISCHER FEHLER im Smart Consultant:", error);
+    console.error("Fehler-Details:", JSON.stringify(error, null, 2));
+    res.status(500).json({ error: error.message || "Interner Server Fehler" });
+  }
+}
+
+export async function getInventoryRulesHandler(req: Request, res: Response) {
+  try {
+    const result = await getInventoryRulesGrouped();
+    res.json(result);
   } catch (error) {
-    console.error("Smart Consultant Error:", error);
-    res.status(500).json({ error: "Fehler im KI-Berater Modul" });
+    console.error("Failed to fetch inventory rules:", error);
+    res.status(500).json({ error: "Failed to fetch inventory rules" });
   }
 }
 

@@ -19,6 +19,9 @@ import {
   type InsertWorkflowConnection,
   type WorkflowStep,
   type InsertWorkflowStep,
+  type ArchitecturalElement,
+  type InsertArchitecturalElement,
+  type StepLineType,
   users,
   practices,
   rooms,
@@ -29,7 +32,8 @@ import {
   knowledgeArtifacts,
   workflows,
   workflowConnections,
-  workflowSteps
+  workflowSteps,
+  architecturalElements
 } from "@shared/schema";
 
 export interface TableStats {
@@ -111,8 +115,15 @@ export interface IStorage {
 
   getWorkflowSteps(workflowId: string): Promise<WorkflowStep[]>;
   createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep>;
+  updateWorkflowStep(id: string, updates: { weight?: number; lineType?: string }): Promise<WorkflowStep | undefined>;
   deleteWorkflowStep(id: string): Promise<void>;
   getMaxStepIndex(workflowId: string): Promise<number>;
+
+  getArchitecturalElements(practiceId: string): Promise<ArchitecturalElement[]>;
+  createArchitecturalElement(element: InsertArchitecturalElement): Promise<ArchitecturalElement>;
+  updateArchitecturalElement(id: string, updates: { x?: number; y?: number; width?: number; rotation?: number; floor?: number; hinge?: string; openingDirection?: string }): Promise<ArchitecturalElement | undefined>;
+  deleteArchitecturalElement(id: string): Promise<void>;
+  getArchitecturalElementWithPractice(elementId: string): Promise<{ element: ArchitecturalElement, practice: Practice } | undefined>;
 
   getDebugStats(): Promise<DebugStats>;
 
@@ -136,7 +147,8 @@ export class DatabaseStorage implements IStorage {
     // const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     this.sessionStore = new PostgresSessionStore({
       pool,
-      createTableIfMissing: true,
+      createTableIfMissing: false,
+      tableName: 'sessions',
     });
   }
 
@@ -387,7 +399,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep> {
-    const result = await db.insert(workflowSteps).values(step).returning();
+    const result = await db.insert(workflowSteps).values({
+      ...step,
+      lineType: step.lineType as StepLineType | undefined,
+    }).returning();
+    return result[0];
+  }
+
+  async updateWorkflowStep(id: string, updates: { weight?: number; lineType?: StepLineType }): Promise<WorkflowStep | undefined> {
+    const result = await db.update(workflowSteps).set(updates).where(eq(workflowSteps.id, id)).returning();
     return result[0];
   }
 
@@ -516,6 +536,33 @@ export class DatabaseStorage implements IStorage {
     const practice = await this.getPractice(workflow[0].practiceId);
     if (!practice) return undefined;
     return { step: result[0], practice };
+  }
+
+  async getArchitecturalElements(practiceId: string): Promise<ArchitecturalElement[]> {
+    return await db.select().from(architecturalElements).where(eq(architecturalElements.practiceId, practiceId));
+  }
+
+  async createArchitecturalElement(element: InsertArchitecturalElement): Promise<ArchitecturalElement> {
+    // Cast element to satisfy Drizzle's strict type checking for the 'type' field
+    const result = await db.insert(architecturalElements).values(element as typeof architecturalElements.$inferInsert).returning();
+    return result[0];
+  }
+
+  async updateArchitecturalElement(id: string, updates: { x?: number; y?: number; width?: number; rotation?: number; floor?: number; hinge?: string; openingDirection?: string }): Promise<ArchitecturalElement | undefined> {
+    const result = await db.update(architecturalElements).set(updates as any).where(eq(architecturalElements.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteArchitecturalElement(id: string): Promise<void> {
+    await db.delete(architecturalElements).where(eq(architecturalElements.id, id));
+  }
+
+  async getArchitecturalElementWithPractice(elementId: string): Promise<{ element: ArchitecturalElement, practice: Practice } | undefined> {
+    const result = await db.select().from(architecturalElements).where(eq(architecturalElements.id, elementId));
+    if (!result[0]) return undefined;
+    const practice = await this.getPractice(result[0].practiceId);
+    if (!practice) return undefined;
+    return { element: result[0], practice };
   }
 }
 

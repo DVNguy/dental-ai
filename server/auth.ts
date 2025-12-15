@@ -75,3 +75,4 @@ export const requireStaffAccess = isAuthenticated;
 export const requireWorkflowAccess = isAuthenticated;
 export const requireConnectionAccess = isAuthenticated;
 export const requireStepAccess = isAuthenticated;
+export const requireElementAccess = isAuthenticated;

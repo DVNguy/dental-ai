@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { knowledgeArtifacts } from "../../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { SAFE_DEFAULTS, type SourceCitation, type BenchmarkPayload, type RulePayload } from "../../shared/taxonomy";
+import { SAFE_DEFAULTS, type SourceCitation, type BenchmarkPayload, type RulePayload, type InventoryItemPayload } from "../../shared/taxonomy";
 
 export interface ArtifactResult<T = any> {
   id: string;
@@ -249,4 +249,61 @@ export function formatCitation(citation: SourceCitation): string {
 
 export function formatCitations(citations: SourceCitation[]): string[] {
   return Array.from(new Set(citations.map(formatCitation)));
+}
+
+export async function getInventoryRules(category?: string): Promise<{
+  items: InventoryItemPayload[];
+  citations: SourceCitation[];
+  fromKnowledge: boolean;
+}> {
+  const artifacts = await getArtifacts({ module: "layout", topic: "inventory_rules" });
+  const inventoryArtifact = artifacts.find(a => a.topic === "inventory_rules");
+
+  if (!inventoryArtifact || !inventoryArtifact.payload?.items) {
+    logMissingTopic("layout", "inventory_rules");
+    return { items: [], citations: [], fromKnowledge: false };
+  }
+
+  let items = inventoryArtifact.payload.items as InventoryItemPayload[];
+
+  if (category) {
+    items = items.filter(item => item.category.toLowerCase() === category.toLowerCase());
+  }
+
+  return {
+    items,
+    citations: inventoryArtifact.citations,
+    fromKnowledge: true
+  };
+}
+
+export async function getInventoryRulesGrouped(): Promise<{
+  byCategory: Record<string, InventoryItemPayload[]>;
+  citations: SourceCitation[];
+  fromKnowledge: boolean;
+}> {
+  const artifacts = await getArtifacts({ module: "layout", topic: "inventory_rules" });
+  const inventoryArtifact = artifacts.find(a => a.topic === "inventory_rules");
+
+  if (!inventoryArtifact || !inventoryArtifact.payload?.items) {
+    logMissingTopic("layout", "inventory_rules");
+    return { byCategory: {}, citations: [], fromKnowledge: false };
+  }
+
+  const items = inventoryArtifact.payload.items as InventoryItemPayload[];
+  const byCategory: Record<string, InventoryItemPayload[]> = {};
+
+  for (const item of items) {
+    const cat = item.category.toLowerCase();
+    if (!byCategory[cat]) {
+      byCategory[cat] = [];
+    }
+    byCategory[cat].push(item);
+  }
+
+  return {
+    byCategory,
+    citations: inventoryArtifact.citations,
+    fromKnowledge: true
+  };
 }
