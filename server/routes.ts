@@ -25,9 +25,8 @@ import {
 } from "./ai/artifactBenchmarks";
 import { getArtifacts } from "./ai/artifactService";
 import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import {
-  authRouter,
-  requireAuth,
   requirePracticeAccess,
   requireRoomAccess,
   requireStaffAccess,
@@ -52,12 +51,40 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  app.use("/api/auth", authRouter);
+  await setupAuth(app);
+
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const practices = await storage.getPracticesByOwnerId(userId);
+      let practiceId = practices.length > 0 ? practices[0].id : null;
+      
+      if (!practiceId) {
+        const practice = await storage.createPractice({
+          name: `Praxis ${user.firstName || user.email || userId}`,
+          budget: 50000,
+          ownerId: userId,
+        });
+        practiceId = practice.id;
+      }
+      
+      res.json({ ...user, practiceId });
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
 
   app.use("/api", (req, res, next) => {
+    if (req.path === "/login" || req.path === "/callback" || req.path === "/logout") return next();
     if (req.path.startsWith("/auth")) return next();
     if (req.path === "/debug/status") return next();
-    return requireAuth(req, res, next);
+    return isAuthenticated(req, res, next);
   });
 
   // Rate limiting for AI endpoints

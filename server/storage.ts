@@ -1,8 +1,6 @@
 import { 
   type User, 
-  type InsertUser,
-  type PasswordResetToken,
-  type InsertPasswordResetToken,
+  type UpsertUser,
   type Practice,
   type InsertPractice,
   type Room,
@@ -22,7 +20,6 @@ import {
   type WorkflowStep,
   type InsertWorkflowStep,
   users,
-  passwordResetTokens,
   practices,
   rooms,
   staff,
@@ -68,15 +65,7 @@ import { eq, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
-
-  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
-  getValidPasswordResetToken(tokenHash: string): Promise<PasswordResetToken | undefined>;
-  markPasswordResetTokenUsed(id: string): Promise<void>;
-  deleteExpiredPasswordResetTokens(): Promise<void>;
+  upsertUser(user: UpsertUser): Promise<User>;
 
   getPractice(id: string): Promise<Practice | undefined>;
   createPractice(practice: InsertPractice): Promise<Practice>;
@@ -136,45 +125,19 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username));
-    return result[0];
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.email, email));
-    return result[0];
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(insertUser).returning();
-    return result[0];
-  }
-
-  async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
-    const result = await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id)).returning();
-    return result[0];
-  }
-
-  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
-    const result = await db.insert(passwordResetTokens).values(token).returning();
-    return result[0];
-  }
-
-  async getValidPasswordResetToken(tokenHash: string): Promise<PasswordResetToken | undefined> {
-    const now = new Date();
-    const result = await db.select().from(passwordResetTokens)
-      .where(sql`${passwordResetTokens.tokenHash} = ${tokenHash} AND ${passwordResetTokens.expiresAt} > ${now} AND ${passwordResetTokens.usedAt} IS NULL`);
-    return result[0];
-  }
-
-  async markPasswordResetTokenUsed(id: string): Promise<void> {
-    await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id));
-  }
-
-  async deleteExpiredPasswordResetTokens(): Promise<void> {
-    const now = new Date();
-    await db.delete(passwordResetTokens).where(sql`${passwordResetTokens.expiresAt} < ${now} OR ${passwordResetTokens.usedAt} IS NOT NULL`);
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 
   async getPractice(id: string): Promise<Practice | undefined> {
