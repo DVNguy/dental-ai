@@ -13,7 +13,7 @@ import type { Request, Response } from "express";
  * - /api/v1/rag/query (RAG query endpoint)
  * 
  * Rate-Key Strategy:
- * - If session.userId exists → use userId as key (more generous limit)
+ * - If req.user.claims.sub exists → use userId as key (more generous limit)
  * - Otherwise → use IP address as key (stricter limit)
  */
 
@@ -21,16 +21,22 @@ const AUTHENTICATED_LIMIT = 30; // requests per minute for logged-in users
 const ANONYMOUS_LIMIT = 10;     // requests per minute for anonymous/IP-based
 const WINDOW_MS = 60 * 1000;    // 1 minute window
 
+function getUserId(req: Request): string | undefined {
+  const user = req.user as any;
+  return user?.claims?.sub;
+}
+
 function getMaxRequests(req: Request): number {
-  return req.session?.userId ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
+  return getUserId(req) ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
 }
 
 export const aiRateLimiter = rateLimit({
   windowMs: WINDOW_MS,
   max: getMaxRequests,
   keyGenerator: (req: Request): string => {
-    if (req.session?.userId) {
-      return `user:${req.session.userId}`;
+    const userId = getUserId(req);
+    if (userId) {
+      return `user:${userId}`;
     }
     return `ip:${req.ip}`;
   },
@@ -38,7 +44,7 @@ export const aiRateLimiter = rateLimit({
   legacyHeaders: false,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
   handler: (req: Request, res: Response) => {
-    const isAuthenticated = !!req.session?.userId;
+    const isAuthenticated = !!getUserId(req);
     const limit = isAuthenticated ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT;
     res.status(429).json({
       error: "Too many requests",

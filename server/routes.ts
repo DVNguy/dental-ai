@@ -129,10 +129,14 @@ export async function registerRoutes(
 
   app.post("/api/practices", async (req, res) => {
     try {
+      const user = req.user as any;
+      if (!user?.claims?.sub) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       const validated = insertPracticeSchema.parse(req.body);
       const practice = await storage.createPractice({
         ...validated,
-        ownerId: req.session.userId,
+        ownerId: user.claims.sub,
       });
       res.json(practice);
     } catch (error) {
