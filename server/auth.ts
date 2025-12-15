@@ -117,19 +117,35 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function requirePracticeAccess(req: Request, res: Response, next: NextFunction) {
-  const practiceId = req.params.id || req.params.practiceId || req.body?.practiceId;
-  if (!practiceId) {
-    return next();
+  const sessionPracticeId = req.session.practiceId;
+  const urlPracticeId = req.params.id || req.params.practiceId;
+  
+  // Session must have a practiceId for any practice-scoped route
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
   }
-
-  const practice = await storage.getPractice(practiceId);
+  
+  // If URL has practiceId, it MUST match session practiceId
+  if (urlPracticeId && urlPracticeId !== sessionPracticeId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+  
+  // Verify the session practice exists and is owned by the current user
+  const practice = await storage.getPractice(sessionPracticeId);
   if (!practice) {
     return res.status(404).json({ error: "Practice not found" });
   }
-
   if (practice.ownerId && practice.ownerId !== req.session.userId) {
     return res.status(403).json({ error: "Access denied" });
   }
+  
+  // Always override body practiceId with session value (never trust client)
+  if (req.body && typeof req.body === "object") {
+    req.body.practiceId = sessionPracticeId;
+  }
+  
+  // Attach sessionPracticeId to request for downstream use
+  (req as any).practiceId = sessionPracticeId;
 
   next();
 }
@@ -140,12 +156,18 @@ export async function requireRoomAccess(req: Request, res: Response, next: NextF
     return next();
   }
 
+  const sessionPracticeId = req.session.practiceId;
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
+  }
+
   const result = await storage.getRoomWithPractice(roomId);
   if (!result) {
     return res.status(404).json({ error: "Room not found" });
   }
 
-  if (result.practice.ownerId && result.practice.ownerId !== req.session.userId) {
+  // Room must belong to session practice
+  if (result.room.practiceId !== sessionPracticeId) {
     return res.status(403).json({ error: "Access denied" });
   }
 
@@ -158,12 +180,18 @@ export async function requireStaffAccess(req: Request, res: Response, next: Next
     return next();
   }
 
+  const sessionPracticeId = req.session.practiceId;
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
+  }
+
   const result = await storage.getStaffWithPractice(staffId);
   if (!result) {
     return res.status(404).json({ error: "Staff member not found" });
   }
 
-  if (result.practice.ownerId && result.practice.ownerId !== req.session.userId) {
+  // Staff must belong to session practice
+  if (result.staff.practiceId !== sessionPracticeId) {
     return res.status(403).json({ error: "Access denied" });
   }
 
@@ -176,12 +204,18 @@ export async function requireWorkflowAccess(req: Request, res: Response, next: N
     return next();
   }
 
+  const sessionPracticeId = req.session.practiceId;
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
+  }
+
   const result = await storage.getWorkflowWithPractice(workflowId);
   if (!result) {
     return res.status(404).json({ error: "Workflow not found" });
   }
 
-  if (result.practice.ownerId && result.practice.ownerId !== req.session.userId) {
+  // Workflow must belong to session practice
+  if (result.workflow.practiceId !== sessionPracticeId) {
     return res.status(403).json({ error: "Access denied" });
   }
 
@@ -194,12 +228,18 @@ export async function requireConnectionAccess(req: Request, res: Response, next:
     return next();
   }
 
+  const sessionPracticeId = req.session.practiceId;
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
+  }
+
   const result = await storage.getConnectionWithPractice(connectionId);
   if (!result) {
     return res.status(404).json({ error: "Connection not found" });
   }
 
-  if (result.practice.ownerId && result.practice.ownerId !== req.session.userId) {
+  // Connection must belong to session practice
+  if (result.connection.practiceId !== sessionPracticeId) {
     return res.status(403).json({ error: "Access denied" });
   }
 
@@ -212,12 +252,18 @@ export async function requireStepAccess(req: Request, res: Response, next: NextF
     return next();
   }
 
+  const sessionPracticeId = req.session.practiceId;
+  if (!sessionPracticeId) {
+    return res.status(403).json({ error: "No practice in session" });
+  }
+
   const result = await storage.getStepWithPractice(stepId);
   if (!result) {
     return res.status(404).json({ error: "Step not found" });
   }
 
-  if (result.practice.ownerId && result.practice.ownerId !== req.session.userId) {
+  // Step's workflow must belong to session practice
+  if (result.workflow.practiceId !== sessionPracticeId) {
     return res.status(403).json({ error: "Access denied" });
   }
 
