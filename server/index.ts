@@ -22,7 +22,9 @@ declare module "http" {
     rawBody: unknown;
   }
 }
-
+// --- LOKALER AUTH BYPASS REMOVED ---
+// Local auth is now handled via passport-local in server/routes.ts
+// --- ENDE BYPASS ---
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -108,11 +110,10 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);
-      
+
       initializeArtifacts().catch(err => {
         console.log("[startup] Artifact initialization skipped:", err.message);
       });

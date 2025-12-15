@@ -1,6 +1,14 @@
+# Abhängigkeiten & Build-Dateien
 node_modules
 dist
 .DS_Store
+
+# Generierte Dateien
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# WICHTIG: Sicherheit (NIEMALS hochladen!)
+.env
+.env.local
+npm-debug.log

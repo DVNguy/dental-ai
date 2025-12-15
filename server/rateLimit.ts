@@ -13,7 +13,7 @@ import type { Request, Response } from "express";
  * - /api/v1/rag/query (RAG query endpoint)
  * 
  * Rate-Key Strategy:
- * - If req.user.claims.sub exists → use userId as key (more generous limit)
+ * - If req.user.id exists → use userId as key (more generous limit)
  * - Otherwise → use IP address as key (stricter limit)
  */
 
@@ -23,7 +23,7 @@ const WINDOW_MS = 60 * 1000;    // 1 minute window
 
 function getUserId(req: Request): string | undefined {
   const user = req.user as any;
-  return user?.claims?.sub;
+  return user?.id;
 }
 
 function getMaxRequests(req: Request): number {
@@ -85,14 +85,14 @@ function getResetTimestamp(): number {
 export function checkAiBudget(practiceId: string): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
   let entry = practiceAiBudgets.get(practiceId);
-  
+
   if (!entry || now >= entry.resetAt) {
     entry = { count: 0, resetAt: getResetTimestamp() };
     practiceAiBudgets.set(practiceId, entry);
   }
-  
+
   const remaining = DAILY_AI_BUDGET_PER_PRACTICE - entry.count;
-  
+
   return {
     allowed: remaining > 0,
     remaining: Math.max(0, remaining),
@@ -103,25 +103,25 @@ export function checkAiBudget(practiceId: string): { allowed: boolean; remaining
 export function incrementAiBudget(practiceId: string): void {
   const now = Date.now();
   let entry = practiceAiBudgets.get(practiceId);
-  
+
   if (!entry || now >= entry.resetAt) {
     entry = { count: 1, resetAt: getResetTimestamp() };
   } else {
     entry.count++;
   }
-  
+
   practiceAiBudgets.set(practiceId, entry);
 }
 
 export function aiBudgetGuard(req: Request, res: Response, next: Function): void {
   const practiceId = (req as any).practiceId || req.session?.practiceId || req.body?.practiceId;
-  
+
   if (!practiceId) {
     return next();
   }
-  
+
   const budget = checkAiBudget(practiceId);
-  
+
   if (!budget.allowed) {
     res.status(429).json({
       error: "Daily AI budget exceeded",
@@ -131,16 +131,16 @@ export function aiBudgetGuard(req: Request, res: Response, next: Function): void
     });
     return;
   }
-  
+
   res.setHeader("X-AI-Budget-Remaining", budget.remaining - 1);
   res.setHeader("X-AI-Budget-Reset", new Date(budget.resetAt).toISOString());
-  
+
   res.on("finish", () => {
     if (res.statusCode >= 200 && res.statusCode < 400) {
       incrementAiBudget(practiceId);
     }
   });
-  
+
   next();
 }
 

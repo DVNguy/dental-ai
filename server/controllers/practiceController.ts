@@ -8,15 +8,15 @@ import { computeWorkflowAnalysis } from "../ai/advisor";
 export async function handleGetUser(req: Request, res: Response) {
   try {
     const user = req.user as any;
-    const userId = user.claims.sub;
+    const userId = user.id;
     const dbUser = await storage.getUser(userId);
     if (!dbUser) {
       return res.status(404).json({ message: "User not found" });
     }
-    
+
     const practices = await storage.getPracticesByOwnerId(userId);
     let practiceId = practices.length > 0 ? practices[0].id : null;
-    
+
     if (!practiceId) {
       const practice = await storage.createPractice({
         name: `Praxis ${dbUser.firstName || dbUser.email || userId}`,
@@ -25,7 +25,7 @@ export async function handleGetUser(req: Request, res: Response) {
       });
       practiceId = practice.id;
     }
-    
+
     res.json({ user: dbUser, practiceId });
   } catch (error) {
     console.error("Error fetching user:", error);
@@ -68,13 +68,13 @@ export async function getPractice(req: Request, res: Response) {
 export async function createPractice(req: Request, res: Response) {
   try {
     const user = req.user as any;
-    if (!user?.claims?.sub) {
+    if (!user?.id) {
       return res.status(401).json({ error: "Authentication required" });
     }
     const validated = insertPracticeSchema.parse(req.body);
     const practice = await storage.createPractice({
       ...validated,
-      ownerId: user.claims.sub,
+      ownerId: user.id,
     });
     res.json(practice);
   } catch (error) {
@@ -116,15 +116,15 @@ export async function computeLayoutEfficiencyHandler(req: Request, res: Response
     }
     const rooms = await storage.getRoomsByPracticeId(practiceId);
     const result = computeLayoutEfficiency(rooms);
-    
+
     const connections = await storage.getConnectionsByPracticeId(practiceId);
     const workflowAnalysis = computeWorkflowAnalysis(rooms, connections);
     let workflowMetrics = null;
     let workflowTips: string[] = [];
-    
+
     if (connections.length > 0) {
       workflowMetrics = computeWorkflowMetrics(rooms, connections);
-      
+
       if (workflowMetrics) {
         for (const conn of workflowMetrics.longestConnections) {
           if (conn.distanceMeters > 5 && workflowTips.length < 3) {
@@ -133,14 +133,14 @@ export async function computeLayoutEfficiencyHandler(req: Request, res: Response
             );
           }
         }
-        
+
         if (workflowMetrics.crossingConnections.length > 0 && workflowTips.length < 3) {
           const crossing = workflowMetrics.crossingConnections[0];
           workflowTips.push(
             `Diese Verbindung kreuzt andere Flows (potenzielle Kollisionen): ${crossing.conn1} × ${crossing.conn2}`
           );
         }
-        
+
         if (workflowMetrics.coreRoomDistanceIssue && workflowTips.length < 3) {
           workflowTips.push(
             `Empfang/Wartebereich/Behandlung sind zu weit auseinander (${workflowMetrics.coreRoomDistanceMeters}m gesamt, optimal <8m).`
@@ -148,14 +148,14 @@ export async function computeLayoutEfficiencyHandler(req: Request, res: Response
         }
       }
     }
-    
+
     let finalScore = result.score;
     if (workflowMetrics) {
       const workflowWeight = 0.15;
       const workflowScore = 100 - workflowMetrics.motionWasteScore;
       finalScore = Math.round(result.score * (1 - workflowWeight) + workflowScore * workflowWeight);
     }
-    
+
     res.json({
       ...result,
       score: finalScore,

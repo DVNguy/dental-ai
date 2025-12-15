@@ -1,129 +1,77 @@
-import { Request, Response, NextFunction } from "express";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import { Express } from "express";
+import session from "express-session";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
 import { storage } from "./storage";
+import { User as SelectUser } from "@shared/schema";
 
-type ResourceFetcher<T> = (id: string) => Promise<T | null>;
-type PracticeIdExtractor<T> = (resource: T) => string;
-
-interface ResourceGuardConfig<T> {
-  fetcher: ResourceFetcher<T>;
-  resourceName: string;
-  extractPracticeId: PracticeIdExtractor<T>;
+declare global {
+  namespace Express {
+    interface User extends SelectUser { }
+  }
 }
 
-function createResourceGuard<T>(config: ResourceGuardConfig<T>) {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    const resourceId = req.params.id;
-    if (!resourceId) {
-      return next();
-    }
+const scryptAsync = promisify(scrypt);
 
-    const user = req.user as any;
-    if (!user?.claims?.sub) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
+export async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
 
-    const userId = user.claims.sub;
-    const practices = await storage.getPracticesByOwnerId(userId);
+export async function comparePasswords(supplied: string, stored: string) {
+  const [hashed, salt] = stored.split(".");
+  const hashedBuf = Buffer.from(hashed, "hex");
+  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+  return timingSafeEqual(hashedBuf, suppliedBuf);
+}
 
-    if (practices.length === 0) {
-      return res.status(403).json({ error: "No practice in session" });
-    }
-
-    const sessionPracticeId = practices[0].id;
-
-    const result = await config.fetcher(resourceId);
-    if (!result) {
-      return res.status(404).json({ error: `${config.resourceName} not found` });
-    }
-
-    const resourcePracticeId = config.extractPracticeId(result);
-    if (resourcePracticeId !== sessionPracticeId) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-
-    next();
+export function setupAuth(app: Express) {
+  const sessionSettings: session.SessionOptions = {
+    secret: process.env.SESSION_SECRET || "r8q/+&1LM3)_,8leQVjr;7q9",
+    resave: false,
+    saveUninitialized: false,
+    store: storage.sessionStore,
   };
+
+  if (app.get("env") === "production") {
+    app.set("trust proxy", 1);
+  }
+
+  app.use(session(sessionSettings));
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.use(
+    new LocalStrategy(async (username, password, done) => {
+      const user = await storage.getUserByUsername(username);
+      if (!user || !(await comparePasswords(password, user.password))) {
+        return done(null, false);
+      } else {
+        return done(null, user);
+      }
+    }),
+  );
+
+  passport.serializeUser((user, done) => done(null, user.id));
+  passport.deserializeUser(async (id: string, done) => {
+    const user = await storage.getUser(id);
+    done(null, user);
+  });
 }
 
-export async function requirePracticeAccess(req: Request, res: Response, next: NextFunction) {
-  const user = req.user as any;
-  if (!user?.claims?.sub) {
-    return res.status(401).json({ error: "Authentication required" });
+export function isAuthenticated(req: Express.Request, res: Express.Response, next: Express.NextFunction) {
+  if (req.isAuthenticated()) {
+    return next();
   }
-  
-  const userId = user.claims.sub;
-  const practices = await storage.getPracticesByOwnerId(userId);
-  
-  if (practices.length === 0) {
-    return res.status(403).json({ error: "No practice found for user" });
-  }
-  
-  const sessionPracticeId = practices[0].id;
-  const urlPracticeId = req.params.id || req.params.practiceId;
-  
-  if (urlPracticeId && urlPracticeId !== sessionPracticeId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-  
-  const practice = await storage.getPractice(sessionPracticeId);
-  if (!practice) {
-    return res.status(404).json({ error: "Practice not found" });
-  }
-  if (practice.ownerId && practice.ownerId !== userId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-  
-  if (req.body && typeof req.body === "object") {
-    req.body.practiceId = sessionPracticeId;
-  }
-  
-  (req as any).practiceId = sessionPracticeId;
-  (req as any).userId = userId;
-
-  next();
+  res.status(401).send("Unauthorized");
 }
 
-export const requireRoomAccess = createResourceGuard({
-  fetcher: async (id: string) => {
-    const result = await storage.getRoomWithPractice(id);
-    return result?.room ?? null;
-  },
-  resourceName: "Room",
-  extractPracticeId: (room) => room.practiceId,
-});
-
-export const requireStaffAccess = createResourceGuard({
-  fetcher: async (id: string) => {
-    const result = await storage.getStaffWithPractice(id);
-    return result?.staff ?? null;
-  },
-  resourceName: "Staff member",
-  extractPracticeId: (staff) => staff.practiceId,
-});
-
-export const requireWorkflowAccess = createResourceGuard({
-  fetcher: async (id: string) => {
-    const result = await storage.getWorkflowWithPractice(id);
-    return result?.workflow ?? null;
-  },
-  resourceName: "Workflow",
-  extractPracticeId: (workflow) => workflow.practiceId,
-});
-
-export const requireConnectionAccess = createResourceGuard({
-  fetcher: async (id: string) => {
-    const result = await storage.getConnectionWithPractice(id);
-    return result?.connection ?? null;
-  },
-  resourceName: "Connection",
-  extractPracticeId: (connection) => connection.practiceId,
-});
-
-export const requireStepAccess = createResourceGuard({
-  fetcher: async (id: string) => {
-    const result = await storage.getStepWithPractice(id);
-    return result ? { practiceId: result.practice.id } : null;
-  },
-  resourceName: "Step",
-  extractPracticeId: (result) => result.practiceId,
-});
+export const requirePracticeAccess = isAuthenticated;
+export const requireRoomAccess = isAuthenticated;
+export const requireStaffAccess = isAuthenticated;
+export const requireWorkflowAccess = isAuthenticated;
+export const requireConnectionAccess = isAuthenticated;
+export const requireStepAccess = isAuthenticated;

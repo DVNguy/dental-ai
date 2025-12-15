@@ -1,5 +1,5 @@
-import { 
-  type User, 
+import {
+  type User,
   type UpsertUser,
   type Practice,
   type InsertPractice,
@@ -60,28 +60,33 @@ export interface DebugStats {
   };
   workflowDuplicates: { slug: string; practiceId: string; count: number }[];
 }
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, sql, desc } from "drizzle-orm";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getUserByUsername(username: string): Promise<User | undefined>;
 
   getPractice(id: string): Promise<Practice | undefined>;
   createPractice(practice: InsertPractice): Promise<Practice>;
   updatePracticeBudget(id: string, budget: number): Promise<Practice | undefined>;
-  
+
   getRoomsByPracticeId(practiceId: string): Promise<Room[]>;
   createRoom(room: InsertRoom): Promise<Room>;
   updateRoom(id: string, updates: Partial<Omit<InsertRoom, 'practiceId'>>): Promise<Room | undefined>;
   deleteRoom(id: string): Promise<void>;
   deleteRoomsByPracticeId(practiceId: string): Promise<void>;
-  
+
   getStaffByPracticeId(practiceId: string): Promise<Staff[]>;
   createStaff(staffMember: InsertStaff): Promise<Staff>;
   updateStaff(id: string, updates: Partial<Omit<InsertStaff, 'practiceId'>>): Promise<Staff | undefined>;
   deleteStaff(id: string): Promise<void>;
-  
+
   getSimulationsByPracticeId(practiceId: string): Promise<Simulation[]>;
   createSimulation(simulation: InsertSimulation): Promise<Simulation>;
 
@@ -89,7 +94,7 @@ export interface IStorage {
   getKnowledgeSource(id: string): Promise<KnowledgeSource | undefined>;
   createKnowledgeSource(source: InsertKnowledgeSource): Promise<KnowledgeSource>;
   deleteKnowledgeSource(id: string): Promise<void>;
-  
+
   getChunksBySourceId(sourceId: string): Promise<KnowledgeChunk[]>;
   createKnowledgeChunk(chunk: InsertKnowledgeChunk): Promise<KnowledgeChunk>;
   searchKnowledgeChunks(queryEmbedding: number[], limit?: number): Promise<(KnowledgeChunk & { source: KnowledgeSource; similarity: number })[]>;
@@ -98,7 +103,7 @@ export interface IStorage {
   createWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
   upsertWorkflow(workflow: InsertWorkflow): Promise<Workflow>;
   deleteWorkflow(id: string): Promise<void>;
-  
+
   getConnectionsByPracticeId(practiceId: string): Promise<WorkflowConnection[]>;
   createConnection(connection: InsertWorkflowConnection): Promise<WorkflowConnection>;
   updateConnection(id: string, updates: Partial<Omit<InsertWorkflowConnection, 'practiceId' | 'fromRoomId' | 'toRoomId'>>): Promise<WorkflowConnection | undefined>;
@@ -108,18 +113,33 @@ export interface IStorage {
   createWorkflowStep(step: InsertWorkflowStep): Promise<WorkflowStep>;
   deleteWorkflowStep(id: string): Promise<void>;
   getMaxStepIndex(workflowId: string): Promise<number>;
-  
+
   getDebugStats(): Promise<DebugStats>;
 
   getPracticesByOwnerId(ownerId: string): Promise<Practice[]>;
-  getRoomWithPractice(roomId: string): Promise<{room: Room, practice: Practice} | undefined>;
-  getStaffWithPractice(staffId: string): Promise<{staff: Staff, practice: Practice} | undefined>;
-  getWorkflowWithPractice(workflowId: string): Promise<{workflow: Workflow, practice: Practice} | undefined>;
-  getConnectionWithPractice(connectionId: string): Promise<{connection: WorkflowConnection, practice: Practice} | undefined>;
-  getStepWithPractice(stepId: string): Promise<{step: WorkflowStep, practice: Practice} | undefined>;
+  getRoomWithPractice(roomId: string): Promise<{ room: Room, practice: Practice } | undefined>;
+  getStaffWithPractice(staffId: string): Promise<{ staff: Staff, practice: Practice } | undefined>;
+  getWorkflowWithPractice(workflowId: string): Promise<{ workflow: Workflow, practice: Practice } | undefined>;
+  getConnectionWithPractice(connectionId: string): Promise<{ connection: WorkflowConnection, practice: Practice } | undefined>;
+  getStepWithPractice(stepId: string): Promise<{ step: WorkflowStep, practice: Practice } | undefined>;
+  sessionStore: any;
 }
 
 export class DatabaseStorage implements IStorage {
+  sessionStore: any;
+
+  constructor() {
+    // Assuming PostgresSessionStore and pool are imported or defined elsewhere
+    // For example:
+    // import { Pool } from 'pg';
+    // import { PostgresSessionStore } from '@quibbble/session-store-postgres';
+    // const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
+    });
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id));
     return result[0];
@@ -138,6 +158,11 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, username));
+    return result[0];
   }
 
   async getPractice(id: string): Promise<Practice | undefined> {
@@ -245,7 +270,7 @@ export class DatabaseStorage implements IStorage {
 
   async searchKnowledgeChunks(queryEmbedding: number[], limit: number = 10): Promise<(KnowledgeChunk & { source: KnowledgeSource; similarity: number })[]> {
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
-    
+
     const results = await db.execute(sql`
       SELECT 
         kc.id,
@@ -314,7 +339,7 @@ export class DatabaseStorage implements IStorage {
         source = EXCLUDED.source
       RETURNING *
     `);
-    
+
     const row = result.rows[0] as any;
     return {
       id: row.id,
@@ -451,7 +476,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(practices).where(eq(practices.ownerId, ownerId));
   }
 
-  async getRoomWithPractice(roomId: string): Promise<{room: Room, practice: Practice} | undefined> {
+  async getRoomWithPractice(roomId: string): Promise<{ room: Room, practice: Practice } | undefined> {
     const result = await db.select().from(rooms).where(eq(rooms.id, roomId));
     if (!result[0]) return undefined;
     const practice = await this.getPractice(result[0].practiceId);
@@ -459,7 +484,7 @@ export class DatabaseStorage implements IStorage {
     return { room: result[0], practice };
   }
 
-  async getStaffWithPractice(staffId: string): Promise<{staff: Staff, practice: Practice} | undefined> {
+  async getStaffWithPractice(staffId: string): Promise<{ staff: Staff, practice: Practice } | undefined> {
     const result = await db.select().from(staff).where(eq(staff.id, staffId));
     if (!result[0]) return undefined;
     const practice = await this.getPractice(result[0].practiceId);
@@ -467,7 +492,7 @@ export class DatabaseStorage implements IStorage {
     return { staff: result[0], practice };
   }
 
-  async getWorkflowWithPractice(workflowId: string): Promise<{workflow: Workflow, practice: Practice} | undefined> {
+  async getWorkflowWithPractice(workflowId: string): Promise<{ workflow: Workflow, practice: Practice } | undefined> {
     const result = await db.select().from(workflows).where(eq(workflows.id, workflowId));
     if (!result[0]) return undefined;
     const practice = await this.getPractice(result[0].practiceId);
@@ -475,7 +500,7 @@ export class DatabaseStorage implements IStorage {
     return { workflow: result[0], practice };
   }
 
-  async getConnectionWithPractice(connectionId: string): Promise<{connection: WorkflowConnection, practice: Practice} | undefined> {
+  async getConnectionWithPractice(connectionId: string): Promise<{ connection: WorkflowConnection, practice: Practice } | undefined> {
     const result = await db.select().from(workflowConnections).where(eq(workflowConnections.id, connectionId));
     if (!result[0]) return undefined;
     const practice = await this.getPractice(result[0].practiceId);
@@ -483,7 +508,7 @@ export class DatabaseStorage implements IStorage {
     return { connection: result[0], practice };
   }
 
-  async getStepWithPractice(stepId: string): Promise<{step: WorkflowStep, practice: Practice} | undefined> {
+  async getStepWithPractice(stepId: string): Promise<{ step: WorkflowStep, practice: Practice } | undefined> {
     const result = await db.select().from(workflowSteps).where(eq(workflowSteps.id, stepId));
     if (!result[0]) return undefined;
     const workflow = await db.select().from(workflows).where(eq(workflows.id, result[0].workflowId));

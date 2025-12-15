@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { type Server } from "http";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import {
   requirePracticeAccess,
   requireRoomAccess,
@@ -9,6 +9,9 @@ import {
   requireConnectionAccess,
   requireStepAccess,
 } from "./auth";
+import { storage } from "./storage";
+import { hashPassword } from "./auth";
+import passport from "passport";
 import { aiRateLimiter, aiBudgetGuard } from "./rateLimit";
 
 import * as practiceController from "./controllers/practiceController";
@@ -19,9 +22,46 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  await setupAuth(app);
+  setupAuth(app);
 
-  app.get('/api/auth/user', isAuthenticated, practiceController.handleGetUser);
+  app.post("/api/login", passport.authenticate("local"), (req, res) => {
+    res.json(req.user);
+  });
+
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        return res.status(400).send("User already exists");
+      }
+
+      const hashedPassword = await hashPassword(req.body.password);
+      const user = await storage.upsertUser({
+        ...req.body,
+        email: req.body.username, // Using username field as email
+        password: hashedPassword,
+      });
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        return res.json(user);
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post("/api/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.sendStatus(200);
+    });
+  });
+
+  app.get("/api/user", (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    res.json(req.user);
+  });
   app.get('/api/me', isAuthenticated, practiceController.handleGetUser);
 
   app.use("/api", (req, res, next) => {
