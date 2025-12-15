@@ -35,9 +35,14 @@ app.use(express.urlencoded({ extended: false }));
 
 const PgStore = connectPgSimple(session);
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === "production" && !sessionSecret) {
+  throw new Error("SESSION_SECRET environment variable is required in production");
+}
+
 app.use(session({
   store: new PgStore({ pool, createTableIfMissing: true }),
-  secret: process.env.SESSION_SECRET || "praxisflow-dev-secret-change-in-prod",
+  secret: sessionSecret || "praxisflow-dev-secret-change-in-prod",
   resave: false,
   saveUninitialized: false,
   cookie: {

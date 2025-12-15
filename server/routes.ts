@@ -137,7 +137,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/layout/efficiency", async (req, res) => {
+  app.post("/api/layout/efficiency", requirePracticeAccess, async (req, res) => {
     try {
       const { practiceId } = req.body;
       if (!practiceId || typeof practiceId !== "string") {
@@ -739,7 +739,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/workflow-steps/:id", async (req, res) => {
+  app.delete("/api/workflow-steps/:id", requireStepAccess, async (req, res) => {
     try {
       await storage.deleteWorkflowStep(req.params.id);
       res.json({ success: true });
@@ -750,7 +750,7 @@ export async function registerRoutes(
 
   // Workflow connection endpoints (practice-based)
 
-  app.put("/api/workflow-connections/:id", async (req, res) => {
+  app.put("/api/workflow-connections/:id", requireConnectionAccess, async (req, res) => {
     try {
       const connection = await storage.updateConnection(req.params.id, req.body);
       if (!connection) {
@@ -762,7 +762,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/workflow-connections/:id", async (req, res) => {
+  app.delete("/api/workflow-connections/:id", requireConnectionAccess, async (req, res) => {
     try {
       await storage.deleteConnection(req.params.id);
       res.json({ success: true });
@@ -772,7 +772,7 @@ export async function registerRoutes(
   });
 
   // Practice-level workflow connections (alle Connections einer Praxis)
-  app.get("/api/practices/:id/workflow-connections", async (req, res) => {
+  app.get("/api/practices/:id/workflow-connections", requirePracticeAccess, async (req, res) => {
     try {
       const connections = await storage.getConnectionsByPracticeId(req.params.id);
       res.json(connections);
@@ -781,7 +781,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/practices/:id/workflow-connections", async (req, res) => {
+  app.post("/api/practices/:id/workflow-connections", requirePracticeAccess, async (req, res) => {
     try {
       const validated = insertWorkflowConnectionSchema.parse({
         ...req.body,
@@ -799,7 +799,7 @@ export async function registerRoutes(
     includeRAG: z.boolean().optional().default(false),
   });
 
-  app.post("/api/ai/analyze-workflows", async (req, res) => {
+  app.post("/api/ai/analyze-workflows", requirePracticeAccess, async (req, res) => {
     try {
       const { practiceId, includeRAG } = analyzeWorkflowsSchema.parse(req.body);
       
