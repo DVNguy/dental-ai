@@ -53,7 +53,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   await setupAuth(app);
 
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  const handleGetUser = async (req: any, res: any) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -73,12 +73,15 @@ export async function registerRoutes(
         practiceId = practice.id;
       }
       
-      res.json({ ...user, practiceId });
+      res.json({ user, practiceId });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
-  });
+  };
+
+  app.get('/api/auth/user', isAuthenticated, handleGetUser);
+  app.get('/api/me', isAuthenticated, handleGetUser);
 
   app.use("/api", (req, res, next) => {
     if (req.path === "/login" || req.path === "/callback" || req.path === "/logout") return next();
