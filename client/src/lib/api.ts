@@ -5,6 +5,7 @@ const API_BASE = "";
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
@@ -19,7 +20,30 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
+export interface AuthUser {
+  id: string;
+  username: string;
+}
+
 export const api = {
+  auth: {
+    register: (data: { username: string; password: string }) =>
+      fetchAPI<AuthUser>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    login: (data: { username: string; password: string }) =>
+      fetchAPI<AuthUser>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    logout: () =>
+      fetchAPI<{ success: boolean }>("/api/auth/logout", {
+        method: "POST",
+      }),
+    me: () => fetchAPI<AuthUser>("/api/auth/me"),
+  },
+
   practices: {
     get: (id: string) => fetchAPI<Practice & { rooms: Room[]; staff: Staff[] }>(`/api/practices/${id}`),
     create: (data: InsertPractice) => fetchAPI<Practice>("/api/practices", {

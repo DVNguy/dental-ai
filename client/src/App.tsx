@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PracticeProvider } from "@/contexts/PracticeContext";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -9,13 +9,14 @@ import Simulation from "@/pages/Simulation";
 import Knowledge from "@/pages/Knowledge";
 import Playbooks from "@/pages/Playbooks";
 import Debug from "@/pages/Debug";
+import Auth from "@/pages/Auth";
 import NotFound from "@/pages/not-found";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const queryClient = new QueryClient();
 
-function Router() {
+function ProtectedRouter() {
   return (
     <AppLayout>
       <Switch>
@@ -32,15 +33,27 @@ function Router() {
   );
 }
 
+function AppRouter() {
+  const [location] = useLocation();
+  
+  if (location === "/auth") {
+    return <Auth />;
+  }
+  
+  return (
+    <PracticeProvider>
+      <ProtectedRouter />
+    </PracticeProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <PracticeProvider>
-        <TooltipProvider>
-          <Router />
-          <Toaster />
-        </TooltipProvider>
-      </PracticeProvider>
+      <TooltipProvider>
+        <AppRouter />
+        <Toaster />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
