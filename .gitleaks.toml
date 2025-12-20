@@ -1,0 +1,25 @@
+# Gitleaks configuration
+# See: https://github.com/gitleaks/gitleaks
+
+title = "Praxisflow Gitleaks Config"
+
+[extend]
+useDefault = true
+
+# Allow example files that contain placeholder keys (no real values)
+[[allowlist.paths]]
+description = "Allow .env.example files"
+paths = [
+    '''\.env\.example$''',
+    '''secrets\.env\.example$''',
+]
+
+# Allow documentation files that may reference key names
+[[allowlist.paths]]
+description = "Allow markdown documentation"
+paths = [
+    '''SECURITY\.md$''',
+    '''TECHNICAL_DOCUMENTATION\.md$''',
+    '''PHASE_2_5_NOTES\.md$''',
+    '''replit\.md$''',
+]

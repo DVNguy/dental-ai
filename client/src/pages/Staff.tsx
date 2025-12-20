@@ -356,7 +356,7 @@ function StaffCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge variant="outline" className="font-normal cursor-help">
-                  {t("staff.fteLabel", { value: member.fte ?? 1.0 })}
+                  {(t as (key: string, opts?: Record<string, unknown>) => string)("staff.fteLabel", { value: member.fte ?? 1.0 })}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
@@ -365,7 +365,7 @@ function StaffCard({
             </Tooltip>
           </TooltipProvider>
           <Badge variant="outline" className="font-normal">
-            {t("staff.hoursPerWeek", { value: member.weeklyHours ?? 40 })}
+            {(t as (key: string, opts?: Record<string, unknown>) => string)("staff.hoursPerWeek", { value: member.weeklyHours ?? 40 })}
           </Badge>
           {member.contractType && (
             <Badge variant="outline" className="font-normal">

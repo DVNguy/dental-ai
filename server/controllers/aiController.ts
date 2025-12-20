@@ -404,7 +404,7 @@ export async function smartConsultantChat(req: Request, res: Response) {
     if (responseMessage.tool_calls) {
       const toolCall = responseMessage.tool_calls[0];
 
-      if (toolCall.function.name === "web_search") {
+      if (toolCall.type === "function" && toolCall.function.name === "web_search") {
         const args = JSON.parse(toolCall.function.arguments);
         console.log(`🔎 KI sucht nach: ${args.query}`);
 

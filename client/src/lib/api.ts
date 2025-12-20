@@ -50,7 +50,7 @@ export const api = {
 
   practices: {
     get: (id: string) => fetchAPI<Practice & { rooms: Room[]; staff: Staff[] }>(`/api/practices/${id}`),
-    create: (data: InsertPractice) => fetchAPI<Practice>("/api/practices", {
+    create: (data: Omit<InsertPractice, "ownerId">) => fetchAPI<Practice>("/api/practices", {
       method: "POST",
       body: JSON.stringify(data),
     }),
