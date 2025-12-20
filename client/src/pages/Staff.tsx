@@ -62,24 +62,28 @@ function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number 
   );
 }
 
-function RatioCard({ 
-  role, 
-  actual, 
-  optimal, 
-  score, 
+function RatioCard({
+  role,
+  actual,
+  optimal,
+  score,
   recommendation,
-  t 
-}: { 
-  role: string; 
-  actual: number; 
-  optimal: number; 
-  score: number; 
+  headcountActual,
+  isFteValue,
+  t
+}: {
+  role: string;
+  actual: number;
+  optimal: number;
+  score: number;
   recommendation: string;
+  headcountActual?: number;  // Show headcount as secondary info when FTE is primary
+  isFteValue?: boolean;      // Indicates if actual is an FTE value
   t: (key: string) => string;
 }) {
   const isOptimal = score >= 80;
   const needsAttention = score < 60;
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -103,8 +107,8 @@ function RatioCard({
           )}
           <span className="font-semibold text-xs capitalize truncate">{role}</span>
         </div>
-        <Badge 
-          variant="secondary" 
+        <Badge
+          variant="secondary"
           className={cn(
             "text-[9px] px-1.5 py-0.5 shrink-0 text-center leading-tight",
             isOptimal ? "bg-green-100 text-green-700" :
@@ -116,18 +120,26 @@ function RatioCard({
           <span className="block font-normal">{t("staff.match")}</span>
         </Badge>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div className="text-center p-2 rounded-lg bg-white/60">
-          <div className="text-lg font-bold text-foreground">{actual}</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.current")}</div>
+          <div className="text-lg font-bold text-foreground">{actual.toFixed(2)}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {isFteValue ? t("staff.currentFte") : t("staff.current")}
+          </div>
+          {/* Show headcount as secondary info when FTE is displayed */}
+          {isFteValue && headcountActual !== undefined && (
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              ({headcountActual.toFixed(1)} {t("staff.headcount")})
+            </div>
+          )}
         </div>
         <div className="text-center p-2 rounded-lg bg-white/60">
           <div className="text-lg font-bold text-primary">{optimal}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.optimal")}</div>
         </div>
       </div>
-      
+
       <p className="text-xs text-muted-foreground leading-relaxed">{recommendation}</p>
     </motion.div>
   );
@@ -149,43 +161,104 @@ function StaffingInsightsSkeleton({ t }: { t: (key: string) => string }) {
 function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | null; t: (key: string) => string }) {
   const staffingAnalysis = analysis?.staffingAnalysis || { overallScore: 0, ratios: {} };
   const staffingScore = analysis?.staffingScore ?? 50;
-  const ratioEntries = Object.entries(staffingAnalysis.ratios || {});
+  const ratios = staffingAnalysis.ratios || {};
   const hasRooms = (analysis?.roomAnalyses?.length ?? 0) > 0;
-  const hasRatioData = ratioEntries.length > 0;
-  
-  const BENCHMARK_RATIOS = [
+  const hasRatioData = Object.keys(ratios).length > 0;
+
+  // Default benchmarks when no data available
+  const BENCHMARK_RATIOS: Array<{
+    role: string;
+    actual: number;
+    optimal: number;
+    score: number;
+    recommendation: string;
+    headcountActual?: number;
+    isFteValue?: boolean;
+  }> = [
     {
-      role: t("benchmarks.supportStaffRatio"),
-      actual: 0,
-      optimal: 2.0,
-      score: 0,
-      recommendation: t("benchmarks.supportStaffDesc")
-    },
-    {
-      role: t("benchmarks.nurseToDoctor"),
+      role: t("benchmarks.clinicalAssistantRatio"),
       actual: 0,
       optimal: 1.5,
       score: 0,
       recommendation: t("benchmarks.nurseToDoctorDesc")
     },
     {
+      role: t("benchmarks.frontdeskRatio"),
+      actual: 0,
+      optimal: 0.4,
+      score: 0,
+      recommendation: t("benchmarks.frontdeskRatioDesc")
+    },
+    {
+      role: t("benchmarks.supportTotalRatio"),
+      actual: 0,
+      optimal: 2.0,
+      score: 0,
+      recommendation: t("benchmarks.supportStaffDesc")
+    },
+    {
       role: t("benchmarks.examRoomsPerProvider"),
       actual: 0,
-      optimal: 2.5,
+      optimal: 3.0,
       score: 0,
       recommendation: t("benchmarks.examRoomsPerProviderDesc")
     }
   ];
-  
-  // Map backend ratio keys to translated labels
-  const getRatioLabel = (key: string): string => {
-    const label = t(`benchmarks.ratioLabels.${key}`);
-    // If translation exists, use it; otherwise fall back to key
-    return label.startsWith("benchmarks.ratioLabels.") ? key : label;
+
+  // Deprecated keys to hide (they are aliases, would cause duplicates)
+  const deprecatedKeys = ["nurseRatio", "supportStaffRatio"];
+
+  // Mapping from base ratio key to its FTE variant key
+  const fteKeyMapping: Record<string, string> = {
+    "clinicalAssistantRatio": "clinicalAssistantFteRatio",
+    "frontdeskRatio": "frontdeskFteRatio",
+    "supportTotalRatio": "supportTotalFteRatio"
   };
 
+  // Preferred display order for ratio keys
+  const ratioDisplayOrder = [
+    "clinicalAssistantRatio",
+    "frontdeskRatio",
+    "supportTotalRatio",
+    "examRoomRatio"
+  ];
+
+  // Map backend ratio keys to translated labels
+  const getRatioLabel = (key: string, isFte: boolean): string => {
+    // Use FTE label if available and isFte is true
+    const labelKey = isFte ? `benchmarks.ratioLabels.${fteKeyMapping[key] || key}` : `benchmarks.ratioLabels.${key}`;
+    const label = t(labelKey);
+    // If translation exists, use it; otherwise fall back to base key
+    if (!label.startsWith("benchmarks.ratioLabels.")) {
+      return label;
+    }
+    // Fallback to base key label
+    const baseLabel = t(`benchmarks.ratioLabels.${key}`);
+    return baseLabel.startsWith("benchmarks.ratioLabels.") ? key : baseLabel;
+  };
+
+  // Build display ratios with FTE-first logic
   const displayRatios = hasRatioData
-    ? ratioEntries.map(([role, data]) => ({ role: getRatioLabel(role), ...data }))
+    ? ratioDisplayOrder
+        .filter(key => ratios[key] !== undefined)
+        .map(key => {
+          const baseData = ratios[key];
+          const fteKey = fteKeyMapping[key];
+          const fteData = fteKey ? ratios[fteKey] : undefined;
+
+          // Use FTE as primary value if available and > 0
+          const useFte = fteData !== undefined && fteData.actual > 0;
+
+          return {
+            role: getRatioLabel(key, useFte),
+            actual: useFte ? fteData.actual : baseData.actual,
+            optimal: baseData.optimal,
+            score: baseData.score,
+            recommendation: useFte ? fteData.recommendation : baseData.recommendation,
+            headcountActual: useFte ? baseData.actual : undefined,
+            isFteValue: useFte
+          };
+        })
     : BENCHMARK_RATIOS;
   
   return (
@@ -240,6 +313,8 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
               optimal={data.optimal}
               score={data.score}
               recommendation={data.recommendation}
+              headcountActual={data.headcountActual}
+              isFteValue={data.isFteValue}
               t={t}
             />
           ))}

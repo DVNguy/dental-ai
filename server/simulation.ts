@@ -88,18 +88,20 @@ async function calculateEfficiencyScore(
 function calculateHarmonyScore(staff: Staff[], rooms: Room[]): number {
   if (staff.length === 0) return 50;
 
-  const doctors = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
-  const nurses = staff.filter(s => s.role === "nurse").length;
-  const receptionists = staff.filter(s => s.role === "receptionist").length;
+  const providersCount = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
+  const clinicalAssistantsCount = staff.filter(s => s.role === "nurse" || s.role === "assistant").length;
+  const frontdeskCount = staff.filter(s => s.role === "receptionist").length;
+  const supportTotalCount = clinicalAssistantsCount + frontdeskCount;
   const examRooms = rooms.filter(r => r.type === "exam").length;
 
-  const staffingAnalysis = evaluateStaffingRatios(
-    doctors, 
-    nurses, 
-    receptionists, 
-    staff.length, 
+  const staffingAnalysis = evaluateStaffingRatios({
+    providersCount,
+    clinicalAssistantsCount,
+    frontdeskCount,
+    supportTotalCount,
+    totalStaff: staff.length,
     examRooms
-  );
+  });
 
   let score = staffingAnalysis.overallScore;
 

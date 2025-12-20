@@ -396,26 +396,41 @@ async function analyzeRoomsWithKnowledge(rooms: Room[], scalePxPerMeter: number 
  */
 function analyzeStaffing(staff: Staff[], rooms: Room[]): StaffingAnalysis {
   // Providers: doctors and dentists who perform treatments
-  const providers = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
+  const providerStaff = staff.filter(s => s.role === "doctor" || s.role === "dentist");
+  const providersCount = providerStaff.length;
 
-  // Support staff count: nurses (MFA), assistants (ZFA), and receptionists
-  // This is used for the supportStaffRatio calculation
-  const supportStaffCount = staff.filter(s =>
-    s.role === "nurse" ||
-    s.role === "assistant" ||
-    s.role === "receptionist"
-  ).length;
+  // Clinical assistants: MFA + ZFA (direct treatment support)
+  const clinicalAssistantStaff = staff.filter(s => s.role === "nurse" || s.role === "assistant");
+  const clinicalAssistantsCount = clinicalAssistantStaff.length;
 
-  // Clinical assistants: MFA + ZFA (for nurseRatio - direct treatment support)
-  const clinicalAssistants = staff.filter(s =>
-    s.role === "nurse" ||
-    s.role === "assistant"
-  ).length;
+  // Frontdesk / Receptionists
+  const frontdeskStaff = staff.filter(s => s.role === "receptionist");
+  const frontdeskCount = frontdeskStaff.length;
 
-  const receptionists = staff.filter(s => s.role === "receptionist").length;
+  // Support total: clinical + frontdesk
+  const supportTotalCount = clinicalAssistantsCount + frontdeskCount;
+
+  // FTE calculations (fallback to 1.0 if fte is undefined/null)
+  const getFte = (s: Staff) => (s.fte !== undefined && s.fte !== null ? s.fte : 1.0);
+  const providersFte = providerStaff.reduce((sum, s) => sum + getFte(s), 0);
+  const clinicalAssistantsFte = clinicalAssistantStaff.reduce((sum, s) => sum + getFte(s), 0);
+  const frontdeskFte = frontdeskStaff.reduce((sum, s) => sum + getFte(s), 0);
+  const supportTotalFte = clinicalAssistantsFte + frontdeskFte;
+
   const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
 
-  return evaluateStaffingRatios(providers, clinicalAssistants, receptionists, staff.length, examRooms, supportStaffCount);
+  return evaluateStaffingRatios({
+    providersCount,
+    clinicalAssistantsCount,
+    frontdeskCount,
+    supportTotalCount,
+    providersFte,
+    clinicalAssistantsFte,
+    frontdeskFte,
+    supportTotalFte,
+    totalStaff: staff.length,
+    examRooms
+  });
 }
 
 function analyzeCapacity(rooms: Room[], staff: Staff[], operatingHours: number = 8): CapacityAnalysis {
