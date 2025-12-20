@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import LayoutEditor from "@/pages/LayoutEditor";
 import Staff from "@/pages/Staff";
+import HrOverview from "@/pages/HrOverview";
 import Simulation from "@/pages/Simulation";
 import Knowledge from "@/pages/Knowledge";
 import Playbooks from "@/pages/Playbooks";
@@ -24,6 +25,7 @@ function ProtectedRouter() {
         <Route path="/" component={Dashboard} />
         <Route path="/editor" component={LayoutEditor} />
         <Route path="/staff" component={Staff} />
+        <Route path="/hr" component={HrOverview} />
         <Route path="/simulation" component={Simulation} />
         <Route path="/knowledge" component={Knowledge} />
         <Route path="/playbooks" component={Playbooks} />

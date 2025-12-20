@@ -12,3 +12,6 @@ vite.config.ts.*
 .env
 .env.local
 npm-debug.log
+# local secrets
+secrets.env
+repomix-output.xml

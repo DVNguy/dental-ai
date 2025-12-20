@@ -338,12 +338,30 @@ export function evaluateRoomSizeM(
   return { score: Math.round(score), assessment, actualSqM, recommendation };
 }
 
+/**
+ * Evaluates staffing ratios against industry benchmarks.
+ *
+ * @param providers - Number of doctors/dentists (those who treat patients)
+ * @param clinicalAssistants - Number of MFA + ZFA (direct treatment support)
+ * @param receptionists - Number of receptionists
+ * @param totalStaff - Total staff count (for reference only)
+ * @param examRooms - Number of treatment rooms
+ * @param supportStaffCount - Explicit count of support staff (nurses + assistants + receptionists).
+ *                            If not provided, calculated as totalStaff - providers (legacy behavior).
+ * @param practiceType - "dental" or "medical" for appropriate benchmarks
+ *
+ * Ratios calculated:
+ * - supportStaffRatio: supportStaffCount / providers (how many support per provider)
+ * - nurseRatio: clinicalAssistants / providers (MFA/ZFA per provider)
+ * - examRoomRatio: examRooms / providers (treatment rooms per provider)
+ */
 export function evaluateStaffingRatios(
-  doctors: number,
-  nurses: number,
+  providers: number,
+  clinicalAssistants: number,
   receptionists: number,
   totalStaff: number,
   examRooms: number,
+  supportStaffCount?: number,
   practiceType: "dental" | "medical" = "dental"
 ): {
   overallScore: number;
@@ -351,16 +369,18 @@ export function evaluateStaffingRatios(
 } {
   const ratios: Record<string, { actual: number; optimal: number; score: number; recommendation: string }> = {};
 
-  if (doctors > 0) {
-    const supportStaff = totalStaff - doctors;
-    const supportRatio = supportStaff / doctors;
-    const benchmark = practiceType === "dental" 
-      ? STAFFING_RATIOS.supportStaffPerDentist 
+  // Support staff ratio: support per provider
+  if (providers > 0) {
+    // Use explicit supportStaffCount if provided, otherwise calculate from totalStaff
+    const supportStaff = supportStaffCount !== undefined ? supportStaffCount : (totalStaff - providers);
+    const supportRatio = supportStaff / providers;
+    const benchmark = practiceType === "dental"
+      ? STAFFING_RATIOS.supportStaffPerDentist
       : STAFFING_RATIOS.supportStaffPerPhysician;
-    
+
     let score: number;
     let recommendation: string;
-    
+
     if (supportRatio < benchmark.min) {
       score = Math.max(30, 70 - ((benchmark.min - supportRatio) / benchmark.min * 40));
       recommendation = `Unterbesetzt: ${supportRatio.toFixed(1)} Mitarbeiter pro Arzt. Empfehlung: ${benchmark.optimal} pro Arzt.`;
@@ -371,38 +391,56 @@ export function evaluateStaffingRatios(
       score = 85 + ((1 - Math.abs(supportRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 15);
       recommendation = `Gutes Personalverhältnis von ${supportRatio.toFixed(1)} Mitarbeitern pro Arzt.`;
     }
-    
+
     ratios.supportStaffRatio = { actual: supportRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+  } else {
+    // No providers - cannot calculate ratio, show n/a state
+    ratios.supportStaffRatio = {
+      actual: 0,
+      optimal: STAFFING_RATIOS.supportStaffPerDentist.optimal,
+      score: 0,
+      recommendation: "Kein Behandler vorhanden. Fügen Sie Zahnärzte/Ärzte hinzu."
+    };
   }
 
-  if (doctors > 0 && nurses > 0) {
-    const nurseRatio = nurses / doctors;
+  // Clinical assistant ratio: MFA/ZFA per provider
+  if (providers > 0 && clinicalAssistants > 0) {
+    const nurseRatio = clinicalAssistants / providers;
     const benchmark = STAFFING_RATIOS.nursePerDoctor;
-    
+
     let score: number;
     let recommendation: string;
-    
+
     if (nurseRatio < benchmark.min) {
       score = Math.max(40, 75 - ((benchmark.min - nurseRatio) / benchmark.min * 35));
-      recommendation = `Niedriges MFA-Verhältnis: ${nurseRatio.toFixed(1)}. Empfehlung: ${benchmark.optimal} MFA pro Arzt.`;
+      recommendation = `Niedriges MFA/ZFA-Verhältnis: ${nurseRatio.toFixed(1)}. Empfehlung: ${benchmark.optimal} pro Arzt.`;
     } else if (nurseRatio > benchmark.max) {
       score = Math.max(70, 95 - ((nurseRatio - benchmark.max) / benchmark.max * 25));
-      recommendation = `Hohes MFA-Verhältnis: ${nurseRatio.toFixed(1)}. Möglicherweise über dem Optimum von ${benchmark.optimal}.`;
+      recommendation = `Hohes MFA/ZFA-Verhältnis: ${nurseRatio.toFixed(1)}. Möglicherweise über dem Optimum von ${benchmark.optimal}.`;
     } else {
       score = 90 + ((1 - Math.abs(nurseRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 10);
-      recommendation = `Ausgezeichnetes MFA-zu-Arzt-Verhältnis von ${nurseRatio.toFixed(1)}.`;
+      recommendation = `Ausgezeichnetes MFA/ZFA-zu-Arzt-Verhältnis von ${nurseRatio.toFixed(1)}.`;
     }
-    
+
     ratios.nurseRatio = { actual: nurseRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+  } else if (providers > 0 && clinicalAssistants === 0) {
+    // Have providers but no clinical assistants
+    ratios.nurseRatio = {
+      actual: 0,
+      optimal: STAFFING_RATIOS.nursePerDoctor.optimal,
+      score: 30,
+      recommendation: "Keine MFA/ZFA vorhanden. Fügen Sie Assistenzpersonal hinzu."
+    };
   }
 
-  if (doctors > 0 && examRooms > 0) {
-    const roomRatio = examRooms / doctors;
+  // Exam room ratio: rooms per provider
+  if (providers > 0 && examRooms > 0) {
+    const roomRatio = examRooms / providers;
     const benchmark = STAFFING_RATIOS.examRoomsPerProvider;
-    
+
     let score: number;
     let recommendation: string;
-    
+
     if (roomRatio < benchmark.min) {
       score = Math.max(35, 70 - ((benchmark.min - roomRatio) / benchmark.min * 35));
       recommendation = `Zu wenig Behandlungsräume (${roomRatio.toFixed(1)} pro Arzt). Empfehlung: ${benchmark.optimal} für optimalen Patientenfluss.`;
@@ -413,13 +451,21 @@ export function evaluateStaffingRatios(
       score = 88 + ((1 - Math.abs(roomRatio - benchmark.optimal) / (benchmark.max - benchmark.min)) * 12);
       recommendation = `Gutes Verhältnis von ${roomRatio.toFixed(1)} Behandlungsräumen pro Arzt.`;
     }
-    
+
     ratios.examRoomRatio = { actual: roomRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+  } else if (providers > 0 && examRooms === 0) {
+    // Have providers but no exam rooms
+    ratios.examRoomRatio = {
+      actual: 0,
+      optimal: STAFFING_RATIOS.examRoomsPerProvider.optimal,
+      score: 0,
+      recommendation: "Keine Behandlungsräume vorhanden. Fügen Sie Behandlungsräume hinzu."
+    };
   }
 
   const scores = Object.values(ratios).map(r => r.score);
-  const overallScore = scores.length > 0 
-    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) 
+  const overallScore = scores.length > 0
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     : 50;
 
   return { overallScore, ratios };

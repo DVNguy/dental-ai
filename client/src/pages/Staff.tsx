@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from "lucide-react";
+import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, type LayoutAnalysis } from "@/lib/api";
@@ -11,6 +12,8 @@ import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Staff as StaffType } from "@shared/schema";
+import { HRKpiDashboard } from "@/components/HRKpiDashboard";
+import { AddStaffDialog } from "@/components/AddStaffDialog";
 
 function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
@@ -131,25 +134,10 @@ function RatioCard({
 function StaffingInsightsSkeleton({ t }: { t: (key: string) => string }) {
   return (
     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-5 w-5 rounded" />
-          <Skeleton className="h-6 w-48" />
-        </div>
-        <Skeleton className="h-4 w-64" />
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="p-4 rounded-xl border bg-white/50">
-              <Skeleton className="h-5 w-32 mb-3" />
-              <div className="grid grid-cols-2 gap-4 mb-3">
-                <Skeleton className="h-16 rounded-lg" />
-                <Skeleton className="h-16 rounded-lg" />
-              </div>
-              <Skeleton className="h-4 w-full" />
-            </div>
-          ))}
+      <CardContent className="py-6">
+        <div className="flex items-center justify-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+          <span className="text-sm text-muted-foreground">{t("staff.loadingInsights")}</span>
         </div>
       </CardContent>
     </Card>
@@ -367,6 +355,7 @@ function EmptyStaffState({ t }: { t: (key: string) => string }) {
 export default function Staff() {
   const { t } = useTranslation();
   const { practiceId, practice } = usePractice();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const { data: analysis, isLoading } = useQuery({
     queryKey: ["ai-analysis", practiceId],
@@ -384,11 +373,21 @@ export default function Staff() {
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary" data-testid="text-staff-title">{t("staff.title")}</h2>
           <p className="text-sm md:text-base text-muted-foreground">{t("staff.subtitle")}</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 w-full sm:w-auto" data-testid="button-add-staff">
+        <Button
+          className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+          data-testid="button-add-staff"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <Plus className="mr-2 h-4 w-4" /> {t("staff.add")}
         </Button>
       </div>
 
+      {/* HR KPI Dashboard - Shows FTE, Overtime, Absence, Labor Cost */}
+      <div className="mb-8">
+        <HRKpiDashboard />
+      </div>
+
+      {/* AI Staffing Insights - Shows role ratios and benchmarks */}
       <div className="mb-8">
         {isLoading ? (
           <StaffingInsightsSkeleton t={t} />
@@ -414,6 +413,8 @@ export default function Staff() {
           <EmptyStaffState t={t} />
         )}
       </div>
+
+      <AddStaffDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep, ArchitecturalElement, InsertArchitecturalElement, ArchitecturalElementType, StepLineType } from "@shared/schema";
+import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep, ArchitecturalElement, InsertArchitecturalElement, ArchitecturalElementType, StepLineType, AlertSeverity } from "@shared/schema";
 
 const API_BASE = "";
 
@@ -88,6 +88,10 @@ export const api = {
     delete: (id: string) => fetchAPI<void>(`/api/staff/${id}`, {
       method: "DELETE",
     }),
+  },
+
+  hr: {
+    getKpis: (practiceId: string) => fetchAPI<HRKpiResponse>(`/api/practices/${practiceId}/hr/kpis`),
   },
 
   elements: {
@@ -392,4 +396,49 @@ export interface InventoryRulesResponse {
   byCategory: Record<string, InventoryItem[]>;
   citations: Array<{ docName: string; headingPath: string | null; chunkId: string }>;
   fromKnowledge: boolean;
+}
+
+// HR KPI Types
+export interface HRAlert {
+  severity: "info" | "warn" | "critical";
+  code: string;
+  title: string;
+  explanation: string;
+  recommendedActions: string[];
+  metric: string;
+  currentValue: number;
+  thresholdValue: number;
+}
+
+export interface HRKpiResponse {
+  timestamp: string;
+  periodStart: string;
+  periodEnd: string;
+  fte: {
+    current: number;
+    target: number;
+    quote: number;
+    delta: number;
+    status: "critical" | "warning" | "ok" | "overstaffed";
+  };
+  absence: {
+    rate: number;
+    totalDays: number;
+    byType: Record<string, number>;
+    status: "critical" | "warning" | "ok";
+  };
+  overtime: {
+    rate: number;
+    totalHours: number;
+    avgPerStaff: number;
+    status: "critical" | "warning" | "ok";
+  };
+  laborCost: {
+    ratio: number;
+    totalCost: number;
+    costPerFte: number;
+    status: "critical" | "warning" | "ok";
+  } | null;
+  overallStatus: "critical" | "warning" | "ok";
+  alerts: HRAlert[];
 }

@@ -53,6 +53,9 @@ export const rooms = pgTable("rooms", {
   floor: integer("floor").notNull().default(0),
 });
 
+export const CONTRACT_TYPES = ["fulltime", "parttime", "minijob", "freelance"] as const;
+export type ContractType = typeof CONTRACT_TYPES[number];
+
 export const staff = pgTable("staff", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
@@ -61,6 +64,13 @@ export const staff = pgTable("staff", {
   avatar: text("avatar").notNull(),
   experienceLevel: integer("experience_level").notNull().default(3),
   specializations: text("specializations").array().notNull().default([]),
+  // HR KPI fields
+  fte: real("fte").notNull().default(1.0),
+  weeklyHours: real("weekly_hours").notNull().default(40),
+  hourlyCost: real("hourly_cost").notNull().default(25),
+  contractType: text("contract_type").$type<ContractType>().default("fulltime"),
+  hireDate: timestamp("hire_date"),
+  terminationDate: timestamp("termination_date"),
 });
 
 export const simulations = pgTable("simulations", {
@@ -185,6 +195,83 @@ export const architecturalElements = pgTable("architectural_elements", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// HR Module Tables
+
+export const ABSENCE_TYPES = ["sick", "vacation", "unpaid", "maternity", "training"] as const;
+export type AbsenceType = typeof ABSENCE_TYPES[number];
+
+export const staffAbsences = pgTable("staff_absences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  absenceType: text("absence_type").notNull().$type<AbsenceType>(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  days: real("days").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const staffOvertime = pgTable("staff_overtime", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staffId: varchar("staff_id").notNull().references(() => staff.id, { onDelete: "cascade" }),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  date: timestamp("date").notNull(),
+  hours: real("hours").notNull(),
+  reason: text("reason"),
+  approved: integer("approved").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const ALERT_SEVERITIES = ["info", "warn", "critical"] as const;
+export type AlertSeverity = typeof ALERT_SEVERITIES[number];
+
+export const hrAlerts = pgTable("hr_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  severity: text("severity").notNull().$type<AlertSeverity>(),
+  code: text("code").notNull(),
+  title: text("title").notNull(),
+  explanation: text("explanation").notNull(),
+  recommendedActions: text("recommended_actions").array().notNull(),
+  metric: text("metric").notNull(),
+  metricValue: real("metric_value"),
+  threshold: real("threshold"),
+  acknowledged: integer("acknowledged").notNull().default(0),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const hrKpiSnapshots = pgTable("hr_kpi_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  practiceId: varchar("practice_id").notNull().references(() => practices.id, { onDelete: "cascade" }),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  // FTE metrics
+  currentFte: real("current_fte").notNull(),
+  targetFte: real("target_fte").notNull(),
+  fteQuote: real("fte_quote").notNull(),
+  // Absence metrics
+  absenceRate: real("absence_rate").notNull(),
+  sickRate: real("sick_rate").notNull(),
+  vacationRate: real("vacation_rate").notNull(),
+  totalAbsenceDays: real("total_absence_days").notNull(),
+  // Overtime metrics
+  overtimeRate: real("overtime_rate").notNull(),
+  totalOvertimeHours: real("total_overtime_hours").notNull(),
+  // Labor cost metrics
+  laborCostRatio: real("labor_cost_ratio").notNull(),
+  totalLaborCost: real("total_labor_cost").notNull(),
+  monthlyRevenue: real("monthly_revenue").notNull(),
+  // Turnover metrics
+  turnoverRate: real("turnover_rate"),
+  // Raw data for recalculation
+  staffCount: integer("staff_count").notNull(),
+  alertsGenerated: integer("alerts_generated").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const upsertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -253,6 +340,28 @@ export const insertArchitecturalElementSchema = createInsertSchema(architectural
   createdAt: true,
 });
 
+// HR Module schemas
+export const insertStaffAbsenceSchema = createInsertSchema(staffAbsences).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStaffOvertimeSchema = createInsertSchema(staffOvertime).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertHrAlertSchema = createInsertSchema(hrAlerts).omit({
+  id: true,
+  createdAt: true,
+  acknowledgedAt: true,
+});
+
+export const insertHrKpiSnapshotSchema = createInsertSchema(hrKpiSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
 
@@ -291,3 +400,16 @@ export type WorkflowStep = typeof workflowSteps.$inferSelect;
 
 export type InsertArchitecturalElement = z.infer<typeof insertArchitecturalElementSchema>;
 export type ArchitecturalElement = typeof architecturalElements.$inferSelect;
+
+// HR Module types
+export type InsertStaffAbsence = z.infer<typeof insertStaffAbsenceSchema>;
+export type StaffAbsence = typeof staffAbsences.$inferSelect;
+
+export type InsertStaffOvertime = z.infer<typeof insertStaffOvertimeSchema>;
+export type StaffOvertime = typeof staffOvertime.$inferSelect;
+
+export type InsertHrAlert = z.infer<typeof insertHrAlertSchema>;
+export type HrAlert = typeof hrAlerts.$inferSelect;
+
+export type InsertHrKpiSnapshot = z.infer<typeof insertHrKpiSnapshotSchema>;
+export type HrKpiSnapshot = typeof hrKpiSnapshots.$inferSelect;

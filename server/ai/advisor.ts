@@ -383,13 +383,39 @@ async function analyzeRoomsWithKnowledge(rooms: Room[], scalePxPerMeter: number 
   return analyses;
 }
 
+/**
+ * Analyzes staffing ratios for a practice.
+ *
+ * Role classification:
+ * - Providers (doctors): "doctor", "dentist" - those who perform treatments
+ * - Support staff: "nurse", "assistant", "receptionist" - those who assist providers
+ *
+ * Dental practice specific:
+ * - ZFA (Zahnmedizinische Fachangestellte) = "assistant" role
+ * - MFA (Medizinische Fachangestellte) = "nurse" role
+ */
 function analyzeStaffing(staff: Staff[], rooms: Room[]): StaffingAnalysis {
-  const doctors = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
-  const nurses = staff.filter(s => s.role === "nurse").length;
-  const receptionists = staff.filter(s => s.role === "receptionist").length;
-  const examRooms = rooms.filter(r => r.type === "exam").length;
+  // Providers: doctors and dentists who perform treatments
+  const providers = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
 
-  return evaluateStaffingRatios(doctors, nurses, receptionists, staff.length, examRooms);
+  // Support staff count: nurses (MFA), assistants (ZFA), and receptionists
+  // This is used for the supportStaffRatio calculation
+  const supportStaffCount = staff.filter(s =>
+    s.role === "nurse" ||
+    s.role === "assistant" ||
+    s.role === "receptionist"
+  ).length;
+
+  // Clinical assistants: MFA + ZFA (for nurseRatio - direct treatment support)
+  const clinicalAssistants = staff.filter(s =>
+    s.role === "nurse" ||
+    s.role === "assistant"
+  ).length;
+
+  const receptionists = staff.filter(s => s.role === "receptionist").length;
+  const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
+
+  return evaluateStaffingRatios(providers, clinicalAssistants, receptionists, staff.length, examRooms, supportStaffCount);
 }
 
 function analyzeCapacity(rooms: Room[], staff: Staff[], operatingHours: number = 8): CapacityAnalysis {

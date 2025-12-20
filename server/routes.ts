@@ -18,6 +18,7 @@ import { aiRateLimiter, aiBudgetGuard } from "./rateLimit";
 import * as practiceController from "./controllers/practiceController";
 import * as workflowController from "./controllers/workflowController";
 import * as aiController from "./controllers/aiController";
+import * as hrController from "./controllers/hrController";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -92,6 +93,14 @@ export async function registerRoutes(
   app.post("/api/practices/:id/staff", requirePracticeAccess, practiceController.createStaff);
   app.put("/api/staff/:id", requireStaffAccess, practiceController.updateStaff);
   app.delete("/api/staff/:id", requireStaffAccess, practiceController.deleteStaff);
+
+  // HR KPI Routes
+  app.get("/api/practices/:id/hr/kpis", requirePracticeAccess, hrController.getHRKpis);
+  // DSGVO-konformer HR-Overview (v2.0)
+  app.get("/api/practices/:id/hr/overview", requirePracticeAccess, hrController.getHrOverview);
+  // Staffing Engine - FTE/VZÄ Bedarfsberechnung
+  app.get("/api/practices/:id/hr/staffing-demand", requirePracticeAccess, hrController.getStaffingDemandFromPractice);
+  app.post("/api/practices/:id/hr/staffing-demand", requirePracticeAccess, hrController.computeStaffingDemand);
 
   app.get("/api/practices/:id/elements", requirePracticeAccess, practiceController.getArchitecturalElements);
   app.post("/api/practices/:id/elements", requirePracticeAccess, practiceController.createArchitecturalElement);
