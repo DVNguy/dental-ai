@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -11,6 +11,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,13 +32,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Star } from "lucide-react";
+import { Loader2, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { InsertStaff, ContractType } from "@shared/schema";
+import type { Staff, ContractType } from "@shared/schema";
 
-interface AddStaffDialogProps {
+interface EditStaffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  staff: Staff | null;
 }
 
 const ROLES = [
@@ -53,7 +65,7 @@ function calculateFte(weeklyHours: number): number {
   return Math.round((weeklyHours / FULLTIME_HOURS) * 100) / 100;
 }
 
-export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
+export function EditStaffDialog({ open, onOpenChange, staff }: EditStaffDialogProps) {
   const { t } = useTranslation();
   const { practiceId } = usePractice();
   const queryClient = useQueryClient();
@@ -71,30 +83,48 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
   // VZÄ is calculated automatically from weekly hours
   const calculatedFte = calculateFte(formData.weeklyHours);
 
-  const createStaffMutation = useMutation({
-    mutationFn: async (data: Omit<InsertStaff, "practiceId">) => {
-      return api.staff.create(practiceId!, data as InsertStaff);
+  // Update form when staff changes
+  useEffect(() => {
+    if (staff) {
+      setFormData({
+        name: staff.name,
+        role: staff.role,
+        experienceLevel: staff.experienceLevel,
+        specializations: staff.specializations.join(", "),
+        weeklyHours: staff.weeklyHours ?? 40,
+        hourlyCost: staff.hourlyCost ?? 25,
+        contractType: (staff.contractType as ContractType) ?? "fulltime",
+      });
+    }
+  }, [staff]);
+
+  const updateStaffMutation = useMutation({
+    mutationFn: async (data: Partial<Staff>) => {
+      if (!staff) throw new Error("No staff member selected");
+      return api.staff.update(staff.id, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["practice", practiceId] });
       queryClient.invalidateQueries({ queryKey: ["hr-kpis", practiceId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["staffing-demand", practiceId] });
       onOpenChange(false);
-      resetForm();
     },
   });
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      role: "assistant",
-      experienceLevel: 3,
-      specializations: "",
-      weeklyHours: 40,
-      hourlyCost: 25,
-      contractType: "fulltime",
-    });
-  };
+  const deleteStaffMutation = useMutation({
+    mutationFn: async () => {
+      if (!staff) throw new Error("No staff member selected");
+      return api.staff.delete(staff.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["practice", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["hr-kpis", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-analysis", practiceId] });
+      queryClient.invalidateQueries({ queryKey: ["staffing-demand", practiceId] });
+      onOpenChange(false);
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +134,7 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
-    createStaffMutation.mutate({
+    updateStaffMutation.mutate({
       name: formData.name,
       role: formData.role,
       avatar: formData.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
@@ -117,23 +147,25 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
     });
   };
 
+  const isPending = updateStaffMutation.isPending || deleteStaffMutation.isPending;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{t("staff.addDialog.title")}</DialogTitle>
+            <DialogTitle>{t("staff.editDialog.title")}</DialogTitle>
             <DialogDescription>
-              {t("staff.addDialog.description")}
+              {t("staff.editDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             {/* Name */}
             <div className="grid gap-2">
-              <Label htmlFor="name">{t("staff.addDialog.name")}</Label>
+              <Label htmlFor="edit-name">{t("staff.addDialog.name")}</Label>
               <Input
-                id="name"
+                id="edit-name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder={t("staff.addDialog.namePlaceholder")}
@@ -143,7 +175,7 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
 
             {/* Role */}
             <div className="grid gap-2">
-              <Label htmlFor="role">{t("staff.addDialog.role")}</Label>
+              <Label htmlFor="edit-role">{t("staff.addDialog.role")}</Label>
               <Select
                 value={formData.role}
                 onValueChange={(value) => setFormData({ ...formData, role: value })}
@@ -163,7 +195,7 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
 
             {/* Contract Type */}
             <div className="grid gap-2">
-              <Label htmlFor="contractType">{t("staff.addDialog.contractType")}</Label>
+              <Label htmlFor="edit-contractType">{t("staff.addDialog.contractType")}</Label>
               <Select
                 value={formData.contractType}
                 onValueChange={(value) => setFormData({ ...formData, contractType: value as ContractType })}
@@ -184,9 +216,9 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
             {/* Weekly Hours & calculated VZÄ */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="weeklyHours">{t("staff.addDialog.weeklyHours")}</Label>
+                <Label htmlFor="edit-weeklyHours">{t("staff.addDialog.weeklyHours")}</Label>
                 <Input
-                  id="weeklyHours"
+                  id="edit-weeklyHours"
                   type="number"
                   min="1"
                   max="60"
@@ -204,10 +236,10 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
 
             {/* Hourly Cost */}
             <div className="grid gap-2">
-              <Label htmlFor="hourlyCost">{t("staff.addDialog.hourlyCost")}</Label>
+              <Label htmlFor="edit-hourlyCost">{t("staff.addDialog.hourlyCost")}</Label>
               <div className="relative">
                 <Input
-                  id="hourlyCost"
+                  id="edit-hourlyCost"
                   type="number"
                   min="0"
                   step="0.5"
@@ -245,9 +277,9 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
 
             {/* Specializations */}
             <div className="grid gap-2">
-              <Label htmlFor="specializations">{t("staff.addDialog.specializations")}</Label>
+              <Label htmlFor="edit-specializations">{t("staff.addDialog.specializations")}</Label>
               <Input
-                id="specializations"
+                id="edit-specializations"
                 value={formData.specializations}
                 onChange={(e) => setFormData({ ...formData, specializations: e.target.value })}
                 placeholder={t("staff.addDialog.specializationsPlaceholder")}
@@ -258,21 +290,57 @@ export function AddStaffDialog({ open, onOpenChange }: AddStaffDialogProps) {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={createStaffMutation.isPending}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={createStaffMutation.isPending || !formData.name.trim()}>
-              {createStaffMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {t("staff.addDialog.submit")}
-            </Button>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isPending}
+                  className="sm:mr-auto"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  {t("common.delete")}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t("staff.deleteDialog.title")}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t("staff.deleteDialog.description", { name: staff?.name })}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteStaffMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleteStaffMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {t("common.delete")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isPending}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={isPending || !formData.name.trim()}>
+                {updateStaffMutation.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {t("common.save")}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

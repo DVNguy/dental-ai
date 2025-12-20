@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, type LayoutAnalysis } from "@/lib/api";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { Staff as StaffType } from "@shared/schema";
 import { HRKpiDashboard } from "@/components/HRKpiDashboard";
 import { AddStaffDialog } from "@/components/AddStaffDialog";
+import { EditStaffDialog } from "@/components/EditStaffDialog";
 
 function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
@@ -175,8 +177,15 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
     }
   ];
   
-  const displayRatios = hasRatioData 
-    ? ratioEntries.map(([role, data]) => ({ role, ...data }))
+  // Map backend ratio keys to translated labels
+  const getRatioLabel = (key: string): string => {
+    const label = t(`benchmarks.ratioLabels.${key}`);
+    // If translation exists, use it; otherwise fall back to key
+    return label.startsWith("benchmarks.ratioLabels.") ? key : label;
+  };
+
+  const displayRatios = hasRatioData
+    ? ratioEntries.map(([role, data]) => ({ role: getRatioLabel(role), ...data }))
     : BENCHMARK_RATIOS;
   
   return (
@@ -305,10 +314,18 @@ function getRoleLabel(role: string, t: (key: string) => string): string {
   return roleMap[role] || role;
 }
 
-function StaffCard({ member, t }: { member: StaffType; t: (key: string) => string }) {
+function StaffCard({
+  member,
+  t,
+  onEdit
+}: {
+  member: StaffType;
+  t: (key: string) => string;
+  onEdit: (member: StaffType) => void;
+}) {
   return (
-    <Card 
-      className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary"
+    <Card
+      className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary group"
       data-testid={`staff-card-${member.id}`}
     >
       <CardHeader className="flex flex-row items-center gap-4 pb-2">
@@ -321,8 +338,42 @@ function StaffCard({ member, t }: { member: StaffType; t: (key: string) => strin
           <CardTitle className="text-lg">{member.name}</CardTitle>
           <CardDescription>{getRoleLabel(member.role, t)}</CardDescription>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => onEdit(member)}
+          data-testid={`edit-staff-${member.id}`}
+        >
+          <Pencil className="h-4 w-4" />
+          <span className="sr-only">{t("common.edit")}</span>
+        </Button>
       </CardHeader>
       <CardContent>
+        {/* HR Info */}
+        <div className="flex flex-wrap gap-2 mb-3 text-xs text-muted-foreground">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="font-normal cursor-help">
+                  {t("staff.fteLabel", { value: member.fte ?? 1.0 })}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t("staff.fteTooltip")}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Badge variant="outline" className="font-normal">
+            {t("staff.hoursPerWeek", { value: member.weeklyHours ?? 40 })}
+          </Badge>
+          {member.contractType && (
+            <Badge variant="outline" className="font-normal">
+              {t(`staff.contractTypes.${member.contractType}`)}
+            </Badge>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-2 mb-4">
           {member.specializations.map(spec => (
             <Badge key={spec} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
@@ -356,6 +407,13 @@ export default function Staff() {
   const { t } = useTranslation();
   const { practiceId, practice } = usePractice();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffType | null>(null);
+
+  const handleEditStaff = (member: StaffType) => {
+    setSelectedStaff(member);
+    setIsEditDialogOpen(true);
+  };
 
   const { data: analysis, isLoading } = useQuery({
     queryKey: ["ai-analysis", practiceId],
@@ -407,7 +465,7 @@ export default function Staff() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {staffMembers.length > 0 ? (
           staffMembers.map((member) => (
-            <StaffCard key={member.id} member={member} t={t} />
+            <StaffCard key={member.id} member={member} t={t} onEdit={handleEditStaff} />
           ))
         ) : (
           <EmptyStaffState t={t} />
@@ -415,6 +473,11 @@ export default function Staff() {
       </div>
 
       <AddStaffDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+      <EditStaffDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        staff={selectedStaff}
+      />
     </div>
   );
 }
