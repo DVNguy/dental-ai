@@ -22,6 +22,14 @@ import {
 } from "./artifactBenchmarks";
 import { formatCitations } from "./artifactService";
 import { pxToM } from "@shared/units";
+import {
+  classifyStaffForRatios,
+  getClassificationDebug,
+  type StaffClassificationDebug
+} from "./staffRoleClassifier";
+
+// Re-export for backward compatibility with tests
+export type { StaffClassificationDebug as StaffingDebugInfo };
 
 const DISTANCE_CLASS_THRESHOLDS = {
   short: { min: 0, max: 3 },
@@ -384,60 +392,60 @@ async function analyzeRoomsWithKnowledge(rooms: Room[], scalePxPerMeter: number 
 }
 
 /**
- * Analyzes staffing ratios for a practice.
- *
- * Role classification:
- * - Providers (doctors): "doctor", "dentist" - those who perform treatments
- * - Support staff: "nurse", "assistant", "receptionist" - those who assist providers
- *
- * Dental practice specific:
- * - ZFA (Zahnmedizinische Fachangestellte) = "assistant" role
- * - MFA (Medizinische Fachangestellte) = "nurse" role
+ * Extended StaffingAnalysis with optional debug info
  */
-function analyzeStaffing(staff: Staff[], rooms: Room[]): StaffingAnalysis {
-  // Providers: doctors and dentists who perform treatments
-  const providerStaff = staff.filter(s => s.role === "doctor" || s.role === "dentist");
-  const providersCount = providerStaff.length;
+export interface StaffingAnalysisWithDebug extends StaffingAnalysis {
+  debug?: StaffClassificationDebug;
+}
 
-  // Clinical assistants: MFA + ZFA (direct treatment support)
-  const clinicalAssistantStaff = staff.filter(s => s.role === "nurse" || s.role === "assistant");
-  const clinicalAssistantsCount = clinicalAssistantStaff.length;
-
-  // Frontdesk / Receptionists
-  const frontdeskStaff = staff.filter(s => s.role === "receptionist");
-  const frontdeskCount = frontdeskStaff.length;
-
-  // Support total: clinical + frontdesk
-  const supportTotalCount = clinicalAssistantsCount + frontdeskCount;
-
-  // FTE calculations (fallback to 1.0 if fte is undefined/null)
-  const getFte = (s: Staff) => (s.fte !== undefined && s.fte !== null ? s.fte : 1.0);
-  const providersFte = providerStaff.reduce((sum, s) => sum + getFte(s), 0);
-  const clinicalAssistantsFte = clinicalAssistantStaff.reduce((sum, s) => sum + getFte(s), 0);
-  const frontdeskFte = frontdeskStaff.reduce((sum, s) => sum + getFte(s), 0);
-  const supportTotalFte = clinicalAssistantsFte + frontdeskFte;
+/**
+ * Analyzes staffing ratios for a practice using centralized role classification.
+ *
+ * Uses the central staffRoleClassifier module for consistent role classification
+ * across all services (advisor, simulation, hrController).
+ *
+ * Role classification (Praxisflow-compatible with pattern matching):
+ * - Providers: zahnarzt, zahnärztin, dentist, doctor, behandler, arzt, etc.
+ * - Clinical Assistants: zfa, dh, mfa, assistenz, prophylaxe, sterilisation, etc.
+ * - Frontdesk: empfang, rezeption, anmeldung, receptionist, frontdesk, etc.
+ * - Excluded from ratios: practice_manager, praxismanager, manager, admin, etc.
+ *
+ * @param includeDebug - If true, includes debug info with role histogram and unknown roles
+ */
+function analyzeStaffing(staff: Staff[], rooms: Room[], includeDebug = false): StaffingAnalysisWithDebug {
+  // Use centralized classifier
+  const classification = classifyStaffForRatios(staff);
 
   const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
 
-  return evaluateStaffingRatios({
-    providersCount,
-    clinicalAssistantsCount,
-    frontdeskCount,
-    supportTotalCount,
-    providersFte,
-    clinicalAssistantsFte,
-    frontdeskFte,
-    supportTotalFte,
+  const baseResult = evaluateStaffingRatios({
+    providersCount: classification.providersCount,
+    clinicalAssistantsCount: classification.clinicalAssistantsCount,
+    frontdeskCount: classification.frontdeskCount,
+    supportTotalCount: classification.supportTotalCount,
+    providersFte: classification.providersFte,
+    clinicalAssistantsFte: classification.clinicalAssistantsFte,
+    frontdeskFte: classification.frontdeskFte,
+    supportTotalFte: classification.supportTotalFte,
     totalStaff: staff.length,
     examRooms
   });
+
+  // Build result with optional debug info
+  const result: StaffingAnalysisWithDebug = { ...baseResult };
+
+  if (includeDebug) {
+    result.debug = getClassificationDebug(classification);
+  }
+
+  return result;
 }
 
 function analyzeCapacity(rooms: Room[], staff: Staff[], operatingHours: number = 8): CapacityAnalysis {
-  const examRooms = rooms.filter(r => r.type === "exam").length;
-  const providers = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
-  
-  return calculatePatientCapacityBenchmark(examRooms, operatingHours, providers);
+  const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
+  const classification = classifyStaffForRatios(staff);
+
+  return calculatePatientCapacityBenchmark(examRooms, operatingHours, classification.providersCount);
 }
 
 async function generateAIInsights(
@@ -524,24 +532,54 @@ Analysiere die Praxis und gib strukturierte Empfehlungen.`;
   }
 }
 
+/**
+ * Analysis metadata for debugging and cache control
+ */
+export interface AnalysisMeta {
+  computedAt: string;       // ISO timestamp
+  fromCache: boolean;       // Currently always false (no caching implemented)
+  forceApplied: boolean;    // Whether force=1 was requested
+  debugEnabled: boolean;    // Whether debug=1 was requested
+  source: "advisor";        // Indicates which pipeline produced this analysis
+}
+
+/**
+ * Extended LayoutAnalysis with optional meta and debug
+ */
+export interface LayoutAnalysisExtended extends LayoutAnalysis {
+  analysisMeta?: AnalysisMeta;
+}
+
+/**
+ * Options for analyzeLayout
+ */
+export interface AnalyzeLayoutOptions {
+  force?: boolean;   // Force recompute (currently no-op since no caching)
+  debug?: boolean;   // Include debug info in staffingAnalysis
+}
+
 export async function analyzeLayout(
   rooms: Room[],
   staff: Staff[],
   operatingHours: number = 8,
   scalePxPerMeter: number = DEFAULT_LAYOUT_SCALE_PX_PER_METER,
-  connections: WorkflowConnection[] = []
-): Promise<LayoutAnalysis> {
+  connections: WorkflowConnection[] = [],
+  options: AnalyzeLayoutOptions = {}
+): Promise<LayoutAnalysisExtended> {
+  const { force = false, debug = false } = options;
+
   const efficiencyScore = calculateLayoutEfficiencyScore(rooms, scalePxPerMeter);
-  
+
   const workflowAnalysis = computeWorkflowAnalysis(rooms, connections);
-  
+
   const roomAnalyses = await analyzeRoomsWithKnowledge(rooms, scalePxPerMeter);
   const avgRoomScore = roomAnalyses.length > 0
     ? roomAnalyses.reduce((sum, r) => sum + r.sizeScore, 0) / roomAnalyses.length
     : 50;
 
-  const staffingAnalysis = analyzeStaffing(staff, rooms);
-  
+  // Pass debug flag to get role histogram and unknown roles
+  const staffingAnalysis = analyzeStaffing(staff, rooms, debug);
+
   const capacityAnalysis = analyzeCapacity(rooms, staff, operatingHours);
 
   const hasReception = rooms.some(r => normalizeRoomType(r.type) === "reception");
@@ -597,7 +635,8 @@ export async function analyzeLayout(
     recommendations.slice(0, 5)
   );
 
-  return {
+  // Build result with optional meta
+  const result: LayoutAnalysisExtended = {
     overallScore,
     efficiencyScore: Math.round(efficiencyScore),
     staffingScore: staffingAnalysis.overallScore,
@@ -607,8 +646,21 @@ export async function analyzeLayout(
     capacityAnalysis,
     recommendations: recommendations.slice(0, 10),
     aiInsights,
-    workflowAnalysis
+    workflowAnalysis,
   };
+
+  // Add analysis metadata (only if force or debug was requested, or always for transparency)
+  if (force || debug) {
+    result.analysisMeta = {
+      computedAt: new Date().toISOString(),
+      fromCache: false,  // No caching implemented
+      forceApplied: force,
+      debugEnabled: debug,
+      source: "advisor",  // Indicates this analysis comes from the advisor pipeline
+    };
+  }
+
+  return result;
 }
 
 export async function getQuickRecommendation(

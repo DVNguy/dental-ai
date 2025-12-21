@@ -12,8 +12,8 @@
     "db:push": "drizzle-kit push",
     "ingest:knowledge": "node --env-file=secrets.env --import tsx/esm scripts/ingest-knowledge.ts",
     "build:artifacts": "node --env-file=secrets.env --import tsx/esm scripts/build-artifacts.ts",
-    "test": "npx tsx --test tests/staffingEngine.test.ts && npx tsx --test tests/benchmarksStaffingRatios.test.ts && npx tsx --test server/services/hrKpi.test.ts && npx tsx --test server/services/hr/hr.test.ts && npx tsx --test tests/artifacts-smoke.test.ts",
-    "test:ci": "npx tsx --test tests/staffingEngine.test.ts && npx tsx --test tests/benchmarksStaffingRatios.test.ts && npx tsx --test server/services/hrKpi.test.ts && npx tsx --test server/services/hr/hr.test.ts",
+    "test": "npx tsx --test tests/staffingEngine.test.ts && npx tsx --test tests/benchmarksStaffingRatios.test.ts && npx tsx --test tests/staffingRoleMapping.test.ts && npx tsx --test server/services/hrKpi.test.ts && npx tsx --test server/services/hr/hr.test.ts && npx tsx --test tests/artifacts-smoke.test.ts",
+    "test:ci": "npx tsx --test tests/staffingEngine.test.ts && npx tsx --test tests/benchmarksStaffingRatios.test.ts && npx tsx --test tests/staffingRoleMapping.test.ts && npx tsx --test tests/staffingRatiosHardened.test.ts && npx tsx --test tests/staffingInsightsPipeline.test.ts && npx tsx --test server/services/hrKpi.test.ts && npx tsx --test server/services/hr/hr.test.ts",
     "test:fast": "npx tsx --test tests/staffingEngine.test.ts && npx tsx --test server/services/hrKpi.test.ts"
   },
   "dependencies": {

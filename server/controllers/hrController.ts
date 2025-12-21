@@ -28,6 +28,9 @@ import {
   type AbsenceRecord,
   type OvertimeRecord,
 } from "../services/hrKpi";
+
+// Centralized role classifier for consistent role classification
+import { classifyStaffForRatios, classifyRole, normalizeStaffRole } from "../ai/staffRoleClassifier";
 import {
   generateHRAlerts,
   type KpiSnapshot,
@@ -792,11 +795,10 @@ export async function getStaffingDemandFromPractice(req: Request, res: Response)
     const { storage: fullStorage } = await import("../storage");
     const rooms = await fullStorage.getRoomsByPracticeId(practiceId);
 
-    // Count dentists/providers
-    const dentists = staffList.filter(
-      (s) => s.role === "dentist" || s.role === "doctor" || s.role === "zahnarzt"
-    );
-    const dentistsFte = dentists.reduce((sum, d) => sum + (d.fte ?? 1.0), 0);
+    // Use centralized classifier for consistent role classification
+    // Cast to Staff[] - the classifier only needs role and fte fields
+    const classification = classifyStaffForRatios(staffList as unknown as import("@shared/schema").Staff[]);
+    const dentistsFte = classification.providersFte;
 
     // Count treatment rooms (exam rooms)
     const treatmentRooms = rooms.filter(
@@ -808,23 +810,21 @@ export async function getStaffingDemandFromPractice(req: Request, res: Response)
       (r) => r.type === "prophy" || r.type === "prophylaxe" || r.type === "hygiene"
     ).length;
 
-    // Calculate current staffing from database
-    const zfaStaff = staffList.filter(
-      (s) => s.role === "assistant" || s.role === "zfa" || s.role === "nurse" || s.role === "mfa"
-    );
-    const receptionStaff = staffList.filter(
-      (s) => s.role === "receptionist" || s.role === "empfang" || s.role === "rezeption"
-    );
-    const prophyStaff = staffList.filter(
-      (s) => s.role === "dh" || s.role === "hygienist" || s.role === "prophylaxe"
-    );
-    const pmStaff = staffList.filter(
-      (s) => s.role === "manager" || s.role === "pm" || s.role === "praxismanager"
-    );
+    // Calculate current staffing from classification
+    // Note: For prophylaxe and PM, we need special handling since they're subsets
+    // Use role pattern matching for more specific categories
+    const prophyStaff = staffList.filter((s) => {
+      const normalized = normalizeStaffRole(s.role);
+      return /prophy|hygien|^dh$/.test(normalized);
+    });
+    const pmStaff = staffList.filter((s) => {
+      const normalized = normalizeStaffRole(s.role);
+      return /manager|^pm$|praxis.*manager/.test(normalized) && classifyRole(normalized) === "excluded";
+    });
 
     const currentStaffing: CurrentStaffingFte = {
-      zfaTotalFte: zfaStaff.reduce((sum, s) => sum + (s.fte ?? 1.0), 0),
-      frontdeskFte: receptionStaff.reduce((sum, s) => sum + (s.fte ?? 1.0), 0),
+      zfaTotalFte: classification.clinicalAssistantsFte,
+      frontdeskFte: classification.frontdeskFte,
       prophyFte: prophyStaff.reduce((sum, s) => sum + (s.fte ?? 1.0), 0),
       pmFte: pmStaff.reduce((sum, s) => sum + (s.fte ?? 1.0), 0),
       totalFte: staffList.reduce((sum, s) => sum + (s.fte ?? 1.0), 0),

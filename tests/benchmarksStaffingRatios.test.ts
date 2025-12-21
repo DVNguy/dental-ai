@@ -575,4 +575,162 @@ describe("evaluateStaffingRatios", () => {
       console.log(`  overallScore: ${result.overallScore}`);
     });
   });
+
+  // ==========================================================================
+  // REGRESSION: Always Return All 4 Primary Ratio Keys
+  // ==========================================================================
+  describe("Always 4 Primary Keys (Regression)", () => {
+    const PRIMARY_KEYS = [
+      "clinicalAssistantRatio",
+      "frontdeskRatio",
+      "supportTotalRatio",
+      "examRoomRatio"
+    ];
+
+    it("providersCount=0, examRooms=0 => all 4 primary keys exist", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 0,
+        clinicalAssistantsCount: 0,
+        frontdeskCount: 0,
+        supportTotalCount: 0,
+        totalStaff: 0,
+        examRooms: 0,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      for (const key of PRIMARY_KEYS) {
+        assert.ok(
+          result.ratios[key] !== undefined,
+          `${key} should exist even when providersCount=0`
+        );
+        assert.strictEqual(
+          result.ratios[key].actual,
+          0,
+          `${key}.actual should be 0 when no providers`
+        );
+      }
+
+      console.log("Regression Test: providersCount=0, examRooms=0");
+      console.log(`  Keys present: ${Object.keys(result.ratios).filter(k => PRIMARY_KEYS.includes(k)).join(", ")}`);
+    });
+
+    it("providersCount=0, examRooms=2 => all 4 primary keys exist", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 0,
+        clinicalAssistantsCount: 2,
+        frontdeskCount: 1,
+        supportTotalCount: 3,
+        totalStaff: 3,
+        examRooms: 2,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      for (const key of PRIMARY_KEYS) {
+        assert.ok(
+          result.ratios[key] !== undefined,
+          `${key} should exist even when providersCount=0 but examRooms>0`
+        );
+      }
+    });
+
+    it("providersCount=1, examRooms=0 => all 4 primary keys exist", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 1,
+        clinicalAssistantsCount: 2,
+        frontdeskCount: 1,
+        supportTotalCount: 3,
+        totalStaff: 4,
+        examRooms: 0,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      for (const key of PRIMARY_KEYS) {
+        assert.ok(
+          result.ratios[key] !== undefined,
+          `${key} should exist even when examRooms=0`
+        );
+      }
+
+      // examRoomRatio should be 0 with appropriate message
+      assert.strictEqual(result.ratios.examRoomRatio.actual, 0);
+      assert.ok(
+        result.ratios.examRoomRatio.recommendation.includes("Behandlungsräume"),
+        "examRoomRatio should mention rooms needed"
+      );
+    });
+
+    it("frontdeskCount=0 => frontdeskRatio exists and is 0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 0,
+        supportTotalCount: 3,
+        totalStaff: 5,
+        examRooms: 4,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      assert.ok(
+        result.ratios.frontdeskRatio !== undefined,
+        "frontdeskRatio should exist when frontdeskCount=0"
+      );
+      assert.strictEqual(
+        result.ratios.frontdeskRatio.actual,
+        0,
+        "frontdeskRatio.actual should be 0"
+      );
+    });
+
+    it("clinicalAssistantsCount=0 => clinicalAssistantRatio exists and is 0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 0,
+        frontdeskCount: 1,
+        supportTotalCount: 1,
+        totalStaff: 3,
+        examRooms: 4,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      assert.ok(
+        result.ratios.clinicalAssistantRatio !== undefined,
+        "clinicalAssistantRatio should exist when clinicalAssistantsCount=0"
+      );
+      assert.strictEqual(
+        result.ratios.clinicalAssistantRatio.actual,
+        0,
+        "clinicalAssistantRatio.actual should be 0"
+      );
+    });
+
+    it("all zeros => all 4 primary keys with actual=0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 0,
+        clinicalAssistantsCount: 0,
+        frontdeskCount: 0,
+        supportTotalCount: 0,
+        totalStaff: 0,
+        examRooms: 0,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      for (const key of PRIMARY_KEYS) {
+        assert.ok(result.ratios[key] !== undefined, `${key} must exist`);
+        assert.strictEqual(result.ratios[key].actual, 0, `${key}.actual must be 0`);
+        assert.strictEqual(result.ratios[key].score, 0, `${key}.score must be 0`);
+        assert.ok(
+          result.ratios[key].recommendation.length > 0,
+          `${key}.recommendation must not be empty`
+        );
+      }
+
+      console.log("All zeros test - keys in output:", Object.keys(result.ratios).sort().join(", "));
+    });
+  });
 });

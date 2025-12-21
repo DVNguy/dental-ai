@@ -130,11 +130,17 @@ export const api = {
   },
 
   ai: {
-    analyzeLayout: (data: { practiceId: string; operatingHours?: number }) =>
-      fetchAPI<LayoutAnalysis>("/api/ai/analyze-layout", {
+    analyzeLayout: (data: { practiceId: string; operatingHours?: number }, options?: { force?: boolean; debug?: boolean }) => {
+      const params = new URLSearchParams();
+      if (options?.force) params.set("force", "1");
+      if (options?.debug) params.set("debug", "1");
+      const queryString = params.toString();
+      const url = `/api/ai/analyze-layout${queryString ? `?${queryString}` : ""}`;
+      return fetchAPI<LayoutAnalysis>(url, {
         method: "POST",
         body: JSON.stringify(data),
-      }),
+      });
+    },
     getRecommendation: (data: { practiceId: string; question?: string }) =>
       fetchAPI<{ recommendation: string }>("/api/ai/recommend", {
         method: "POST",
@@ -247,6 +253,7 @@ export interface LayoutAnalysis {
   recommendations: string[];
   aiInsights: string;
   workflowAnalysis?: WorkflowAnalysis;
+  analysisMeta?: AnalysisMeta;
 }
 
 export interface RoomAnalysis {
@@ -259,6 +266,20 @@ export interface RoomAnalysis {
   recommendation: string;
 }
 
+export interface StaffingDebugInfo {
+  providersCount: number;
+  clinicalAssistantsCount: number;
+  frontdeskCount: number;
+  supportTotalCount: number;
+  excludedCount: number;
+  providersFte: number;
+  clinicalAssistantsFte: number;
+  frontdeskFte: number;
+  supportTotalFte: number;
+  roleHistogram: Record<string, number>;
+  unknownRoles: string[];
+}
+
 export interface StaffingAnalysis {
   overallScore: number;
   ratios: Record<string, {
@@ -267,6 +288,15 @@ export interface StaffingAnalysis {
     score: number;
     recommendation: string;
   }>;
+  debug?: StaffingDebugInfo;
+}
+
+export interface AnalysisMeta {
+  computedAt: string;
+  fromCache: boolean;
+  forceApplied: boolean;
+  debugEnabled: boolean;
+  source: "advisor";  // Indicates which pipeline produced this analysis
 }
 
 export interface CapacityAnalysis {
