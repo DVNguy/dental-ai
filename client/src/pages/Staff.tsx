@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2, Pencil } from "lucide-react";
+import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2, Pencil, RefreshCw, Bug } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { api, type LayoutAnalysis } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type LayoutAnalysis, type StaffingDebugInfo } from "@/lib/api";
 import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,14 @@ import type { Staff as StaffType } from "@shared/schema";
 import { HRKpiDashboard } from "@/components/HRKpiDashboard";
 import { AddStaffDialog } from "@/components/AddStaffDialog";
 import { EditStaffDialog } from "@/components/EditStaffDialog";
+
+// Staffing ratio benchmarks (mirrored from server/ai/benchmarks.ts for client-side defaults)
+const STAFFING_RATIOS = {
+  nursePerDoctor: { optimal: 1.5 },
+  receptionistPerProvider: { optimal: 0.4 },
+  supportStaffPerDentist: { optimal: 2.0 },
+  examRoomsPerProvider: { optimal: 3.0 }
+} as const;
 
 function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
@@ -62,8 +70,41 @@ function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number 
   );
 }
 
+// Mapping from ratio key to unit translation keys (using new i18n keys)
+const RATIO_UNIT_MAPPING: Record<string, { unit: string; unitFte: string }> = {
+  clinicalAssistantRatio: { unit: "staff.ratioLegend.units.clinicalAssistant", unitFte: "staff.ratioLegend.units.clinicalAssistantFte" },
+  clinicalAssistantFteRatio: { unit: "staff.ratioLegend.units.clinicalAssistantFte", unitFte: "staff.ratioLegend.units.clinicalAssistantFte" },
+  frontdeskRatio: { unit: "staff.ratioLegend.units.frontdesk", unitFte: "staff.ratioLegend.units.frontdeskFte" },
+  frontdeskFteRatio: { unit: "staff.ratioLegend.units.frontdeskFte", unitFte: "staff.ratioLegend.units.frontdeskFte" },
+  supportTotalRatio: { unit: "staff.ratioLegend.units.supportTotal", unitFte: "staff.ratioLegend.units.supportTotalFte" },
+  supportTotalFteRatio: { unit: "staff.ratioLegend.units.supportTotalFte", unitFte: "staff.ratioLegend.units.supportTotalFte" },
+  examRoomRatio: { unit: "staff.ratioLegend.units.examRooms", unitFte: "staff.ratioLegend.units.examRooms" }, // rooms don't have FTE
+};
+
+/**
+ * Format a number for ratio display: max 1 decimal, handle NaN/Infinity/undefined/null
+ * Examples: 3 -> "3", 2.5 -> "2.5", NaN -> "—"
+ */
+function formatRatioNumber(value: number | undefined | null): string {
+  if (value === undefined || value === null || !Number.isFinite(value)) return "—";
+  // Round to 1 decimal place
+  const rounded = Math.round(value * 10) / 10;
+  // Show integer if no decimal needed
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+}
+
+/**
+ * Format a short ratio string like "1:3" or "1:2.5"
+ * Returns "—" if value is invalid
+ */
+function formatShortRatio(value: number | undefined | null): string {
+  if (value === undefined || value === null || !Number.isFinite(value)) return "—";
+  return `1:${formatRatioNumber(value)}`;
+}
+
 function RatioCard({
   role,
+  ratioKey,
   actual,
   optimal,
   score,
@@ -73,6 +114,7 @@ function RatioCard({
   t
 }: {
   role: string;
+  ratioKey: string;
   actual: number;
   optimal: number;
   score: number;
@@ -83,6 +125,12 @@ function RatioCard({
 }) {
   const isOptimal = score >= 80;
   const needsAttention = score < 60;
+
+  // Get unit for this ratio
+  const unitMapping = RATIO_UNIT_MAPPING[ratioKey] || { unit: ratioKey, unitFte: ratioKey };
+  const unitKey = isFteValue ? unitMapping.unitFte : unitMapping.unit;
+  const unitLabel = t(unitKey) || unitKey;
+  const providerLabel = isFteValue ? t("staff.ratioLegend.units.providerFte") : t("staff.ratioLegend.units.provider");
 
   return (
     <motion.div
@@ -140,6 +188,18 @@ function RatioCard({
         </div>
       </div>
 
+      {/* Ratio Legend - human readable interpretation */}
+      <div className="mb-3 p-2 rounded-lg bg-white/40 text-[10px] space-y-1">
+        <div className="flex justify-between text-muted-foreground">
+          <span className="font-medium">{t("staff.ratioLegend.actual")}</span>
+          <span>{formatShortRatio(actual)} (1 {providerLabel} : {formatRatioNumber(actual)} {unitLabel})</span>
+        </div>
+        <div className="flex justify-between text-muted-foreground">
+          <span className="font-medium">{t("staff.ratioLegend.target")}</span>
+          <span>{formatShortRatio(optimal)} (1 {providerLabel} : {formatRatioNumber(optimal)} {unitLabel})</span>
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground leading-relaxed">{recommendation}</p>
     </motion.div>
   );
@@ -158,55 +218,105 @@ function StaffingInsightsSkeleton({ t }: { t: (key: string) => string }) {
   );
 }
 
-function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | null; t: (key: string) => string }) {
+function StaffingDebugPanel({ debug, meta, t }: {
+  debug: StaffingDebugInfo;
+  meta?: { computedAt: string; fromCache: boolean; forceApplied: boolean; debugEnabled: boolean };
+  t: (key: string) => string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <details
+      className="mt-4 p-3 rounded-lg bg-slate-100 border border-slate-300 text-xs"
+      open={isOpen}
+      onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className="cursor-pointer font-medium text-slate-700 flex items-center gap-2">
+        <Bug className="h-4 w-4" />
+        {t("staff.debugInfo") || "Debug Info"}
+        {meta && (
+          <span className="ml-auto text-slate-500">
+            {meta.fromCache ? "Cache" : "Fresh"} | {new Date(meta.computedAt).toLocaleTimeString()}
+          </span>
+        )}
+      </summary>
+      <div className="mt-3 space-y-3">
+        {/* Counts */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Providers</div>
+            <div className="font-bold text-lg">{debug.providersCount}</div>
+            <div className="text-slate-400">FTE: {debug.providersFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Clinical</div>
+            <div className="font-bold text-lg">{debug.clinicalAssistantsCount}</div>
+            <div className="text-slate-400">FTE: {debug.clinicalAssistantsFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Frontdesk</div>
+            <div className="font-bold text-lg">{debug.frontdeskCount}</div>
+            <div className="text-slate-400">FTE: {debug.frontdeskFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Excluded</div>
+            <div className="font-bold text-lg">{debug.excludedCount}</div>
+          </div>
+        </div>
+
+        {/* Role Histogram */}
+        {Object.keys(debug.roleHistogram).length > 0 && (
+          <div>
+            <div className="font-medium text-slate-600 mb-1">{t("staff.roleHistogram") || "Role Histogram"}</div>
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(debug.roleHistogram).map(([role, count]) => (
+                <Badge key={role} variant="outline" className="text-xs">
+                  {role}: {count}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Unknown Roles */}
+        {debug.unknownRoles.length > 0 && (
+          <div className="p-2 bg-amber-50 border border-amber-200 rounded">
+            <div className="font-medium text-amber-700 mb-1">{t("staff.unknownRoles") || "Unknown Roles"}</div>
+            <div className="flex flex-wrap gap-1">
+              {debug.unknownRoles.map((role) => (
+                <Badge key={role} variant="outline" className="text-xs bg-amber-100 border-amber-300 text-amber-800">
+                  {role}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function StaffingInsightsSection({
+  analysis,
+  t,
+  onForceRefresh,
+  isRefreshing
+}: {
+  analysis: LayoutAnalysis | null;
+  t: (key: string) => string;
+  onForceRefresh?: () => void;
+  isRefreshing?: boolean;
+}) {
   const staffingAnalysis = analysis?.staffingAnalysis || { overallScore: 0, ratios: {} };
   const staffingScore = analysis?.staffingScore ?? 50;
   const ratios = staffingAnalysis.ratios || {};
   const hasRooms = (analysis?.roomAnalyses?.length ?? 0) > 0;
   const hasRatioData = Object.keys(ratios).length > 0;
+  const debug = staffingAnalysis.debug;
+  const meta = analysis?.analysisMeta;
 
-  // Default benchmarks when no data available
-  const BENCHMARK_RATIOS: Array<{
-    role: string;
-    actual: number;
-    optimal: number;
-    score: number;
-    recommendation: string;
-    headcountActual?: number;
-    isFteValue?: boolean;
-  }> = [
-    {
-      role: t("benchmarks.clinicalAssistantRatio"),
-      actual: 0,
-      optimal: 1.5,
-      score: 0,
-      recommendation: t("benchmarks.nurseToDoctorDesc")
-    },
-    {
-      role: t("benchmarks.frontdeskRatio"),
-      actual: 0,
-      optimal: 0.4,
-      score: 0,
-      recommendation: t("benchmarks.frontdeskRatioDesc")
-    },
-    {
-      role: t("benchmarks.supportTotalRatio"),
-      actual: 0,
-      optimal: 2.0,
-      score: 0,
-      recommendation: t("benchmarks.supportStaffDesc")
-    },
-    {
-      role: t("benchmarks.examRoomsPerProvider"),
-      actual: 0,
-      optimal: 3.0,
-      score: 0,
-      recommendation: t("benchmarks.examRoomsPerProviderDesc")
-    }
-  ];
-
-  // Deprecated keys to hide (they are aliases, would cause duplicates)
-  const deprecatedKeys = ["nurseRatio", "supportStaffRatio"];
+  // Check if we have providers - if not, ratios will be 0
+  const noProviders = debug?.providersCount === 0;
 
   // Mapping from base ratio key to its FTE variant key
   const fteKeyMapping: Record<string, string> = {
@@ -237,29 +347,56 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
     return baseLabel.startsWith("benchmarks.ratioLabels.") ? key : baseLabel;
   };
 
-  // Build display ratios with FTE-first logic
-  const displayRatios = hasRatioData
-    ? ratioDisplayOrder
-        .filter(key => ratios[key] !== undefined)
-        .map(key => {
-          const baseData = ratios[key];
-          const fteKey = fteKeyMapping[key];
-          const fteData = fteKey ? ratios[fteKey] : undefined;
+  // Default fallback values for each ratio key (used when backend doesn't return a key)
+  const ratioDefaults: Record<string, { actual: number; optimal: number; score: number; recommendation: string }> = {
+    clinicalAssistantRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.nursePerDoctor.optimal,
+      score: 0,
+      recommendation: t("benchmarks.nurseToDoctorDesc")
+    },
+    frontdeskRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.receptionistPerProvider.optimal,
+      score: 0,
+      recommendation: t("benchmarks.frontdeskRatioDesc")
+    },
+    supportTotalRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.supportStaffPerDentist.optimal,
+      score: 0,
+      recommendation: t("benchmarks.supportStaffDesc")
+    },
+    examRoomRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.examRoomsPerProvider.optimal,
+      score: 0,
+      recommendation: t("benchmarks.examRoomsPerProviderDesc")
+    }
+  };
 
-          // Use FTE as primary value if available and > 0
-          const useFte = fteData !== undefined && fteData.actual > 0;
+  // Build display ratios - ALWAYS show all 4 primary ratios in fixed order
+  // Use backend data when available, fallback to defaults otherwise
+  const displayRatios = ratioDisplayOrder.map(key => {
+    // Use backend data if available, otherwise use defaults
+    const baseData = ratios[key] ?? ratioDefaults[key];
+    const fteKey = fteKeyMapping[key];
+    const fteData = fteKey ? ratios[fteKey] : undefined;
 
-          return {
-            role: getRatioLabel(key, useFte),
-            actual: useFte ? fteData.actual : baseData.actual,
-            optimal: baseData.optimal,
-            score: baseData.score,
-            recommendation: useFte ? fteData.recommendation : baseData.recommendation,
-            headcountActual: useFte ? baseData.actual : undefined,
-            isFteValue: useFte
-          };
-        })
-    : BENCHMARK_RATIOS;
+    // Use FTE as primary value if available and > 0
+    const useFte = fteData !== undefined && fteData.actual > 0;
+
+    return {
+      ratioKey: key,  // Keep the original key for unit mapping
+      role: getRatioLabel(key, useFte),
+      actual: useFte ? fteData.actual : baseData.actual,
+      optimal: baseData.optimal,
+      score: baseData.score,
+      recommendation: useFte ? fteData.recommendation : baseData.recommendation,
+      headcountActual: useFte ? baseData.actual : undefined,
+      isFteValue: useFte
+    };
+  });
   
   return (
     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 overflow-hidden" data-testid="staffing-insights-card">
@@ -276,10 +413,25 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
               </CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
-            <StaffingScoreRing score={staffingScore} size={60} />
-            <div className="text-right">
-              <div className="text-xs text-blue-100">{t("staff.staffingOptimization")}</div>
+          <div className="flex items-center gap-3">
+            {onForceRefresh && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onForceRefresh}
+                disabled={isRefreshing}
+                className="text-white hover:bg-white/20"
+                data-testid="force-refresh-button"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-1", isRefreshing && "animate-spin")} />
+                {t("staff.refreshAnalysis") || "Neu berechnen"}
+              </Button>
+            )}
+            <div className="bg-white/10 rounded-xl p-3 flex items-center gap-3">
+              <StaffingScoreRing score={staffingScore} size={60} />
+              <div className="text-right">
+                <div className="text-xs text-blue-100">{t("staff.staffingOptimization")}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -307,7 +459,8 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {displayRatios.map((data) => (
             <RatioCard
-              key={data.role}
+              key={data.ratioKey}
+              ratioKey={data.ratioKey}
               role={data.role}
               actual={data.actual}
               optimal={data.optimal}
@@ -353,6 +506,30 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
             </div>
           </motion.div>
         )}
+
+        {/* Warning when no providers detected */}
+        {noProviders && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3"
+            data-testid="no-providers-warning"
+          >
+            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-800 mb-1">
+                {t("staff.noProvidersWarning") || "Kein Behandler erkannt"}
+              </p>
+              <p className="text-xs text-red-700">
+                {t("staff.noProvidersHint") ||
+                  "Kein Behandler (Zahnarzt/Arzt) in Staff-Daten erkannt – Ratios pro Behandler bleiben 0. Legen Sie mindestens einen Staff mit Rolle 'dentist', 'zahnarzt' oder 'arzt' an."}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Debug panel (only shown when debug data is present) */}
+        {debug && <StaffingDebugPanel debug={debug} meta={meta} t={t} />}
       </CardContent>
     </Card>
   );
@@ -481,21 +658,41 @@ function EmptyStaffState({ t }: { t: (key: string) => string }) {
 export default function Staff() {
   const { t } = useTranslation();
   const { practiceId, practice } = usePractice();
+  const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffType | null>(null);
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
 
   const handleEditStaff = (member: StaffType) => {
     setSelectedStaff(member);
     setIsEditDialogOpen(true);
   };
 
-  const { data: analysis, isLoading } = useQuery({
+  const { data: analysis, isLoading, refetch } = useQuery({
     queryKey: ["ai-analysis", practiceId],
-    queryFn: () => api.ai.analyzeLayout({ practiceId: practiceId!, operatingHours: 8 }),
+    queryFn: () => api.ai.analyzeLayout({ practiceId: practiceId!, operatingHours: 8 }, { debug: true }),
     enabled: !!practiceId,
     staleTime: 30000,
   });
+
+  // Force refresh with force=1 and debug=1
+  const handleForceRefresh = async () => {
+    if (!practiceId) return;
+    setIsForceRefreshing(true);
+    try {
+      const freshAnalysis = await api.ai.analyzeLayout(
+        { practiceId, operatingHours: 8 },
+        { force: true, debug: true }
+      );
+      // Update the cache with the fresh result
+      queryClient.setQueryData(["ai-analysis", practiceId], freshAnalysis);
+    } catch (error) {
+      console.error("Force refresh failed:", error);
+    } finally {
+      setIsForceRefreshing(false);
+    }
+  };
 
   const staffMembers = practice?.staff || [];
 
@@ -525,7 +722,12 @@ export default function Staff() {
         {isLoading ? (
           <StaffingInsightsSkeleton t={t} />
         ) : (
-          <StaffingInsightsSection analysis={analysis ?? null} t={t} />
+          <StaffingInsightsSection
+            analysis={analysis ?? null}
+            t={t}
+            onForceRefresh={handleForceRefresh}
+            isRefreshing={isForceRefreshing}
+          />
         )}
       </div>
 
