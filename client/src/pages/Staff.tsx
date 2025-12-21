@@ -70,23 +70,97 @@ function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number 
   );
 }
 
+// Default fallback for unknown ratio keys
+const DEFAULT_RATIO_UNITS = {
+  numerator: "staff.ratioLegend.units.provider",
+  numeratorFte: "staff.ratioLegend.units.providerFte",
+  denominator: "staff.ratioLegend.units.supportTotal",
+  denominatorFte: "staff.ratioLegend.units.supportTotalFte",
+};
+
 // Mapping from ratio key to unit translation keys (using new i18n keys)
-const RATIO_UNIT_MAPPING: Record<string, { unit: string; unitFte: string }> = {
-  clinicalAssistantRatio: { unit: "staff.ratioLegend.units.clinicalAssistant", unitFte: "staff.ratioLegend.units.clinicalAssistantFte" },
-  clinicalAssistantFteRatio: { unit: "staff.ratioLegend.units.clinicalAssistantFte", unitFte: "staff.ratioLegend.units.clinicalAssistantFte" },
-  frontdeskRatio: { unit: "staff.ratioLegend.units.frontdesk", unitFte: "staff.ratioLegend.units.frontdeskFte" },
-  frontdeskFteRatio: { unit: "staff.ratioLegend.units.frontdeskFte", unitFte: "staff.ratioLegend.units.frontdeskFte" },
-  supportTotalRatio: { unit: "staff.ratioLegend.units.supportTotal", unitFte: "staff.ratioLegend.units.supportTotalFte" },
-  supportTotalFteRatio: { unit: "staff.ratioLegend.units.supportTotalFte", unitFte: "staff.ratioLegend.units.supportTotalFte" },
-  examRoomRatio: { unit: "staff.ratioLegend.units.examRooms", unitFte: "staff.ratioLegend.units.examRooms" }, // rooms don't have FTE
+// Complete mapping for all known ratio keys with FTE variants
+const RATIO_UNIT_MAPPING: Record<string, {
+  numerator: string;
+  numeratorFte: string;
+  denominator: string;
+  denominatorFte: string;
+}> = {
+  clinicalAssistantRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistant",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  clinicalAssistantFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistantFte",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  frontdeskRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.frontdesk",
+    denominatorFte: "staff.ratioLegend.units.frontdeskFte"
+  },
+  frontdeskFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.frontdeskFte",
+    denominatorFte: "staff.ratioLegend.units.frontdeskFte"
+  },
+  supportTotalRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotal",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
+  supportTotalFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotalFte",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
+  examRoomRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.examRooms",
+    denominatorFte: "staff.ratioLegend.units.examRooms" // rooms don't have FTE
+  },
+  // Legacy aliases - map to correct keys to avoid crashes
+  nurseRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistant",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  supportStaffRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotal",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
 };
 
 /**
- * Format a number for ratio display: max 1 decimal, handle NaN/Infinity/undefined/null
- * Examples: 3 -> "3", 2.5 -> "2.5", NaN -> "—"
+ * Get unit translation keys for a ratio key with safe fallback
+ * Never returns undefined - always returns valid i18n keys
+ */
+function getRatioUnits(ratioKey: string, isFte: boolean): { numeratorKey: string; denominatorKey: string } {
+  const mapping = RATIO_UNIT_MAPPING[ratioKey] || DEFAULT_RATIO_UNITS;
+  return {
+    numeratorKey: isFte ? mapping.numeratorFte : mapping.numerator,
+    denominatorKey: isFte ? mapping.denominatorFte : mapping.denominator,
+  };
+}
+
+/**
+ * Format a number for ratio display: max 1 decimal, handle NaN/Infinity/undefined/null/negative
+ * Examples: 3 -> "3", 2.5 -> "2.5", NaN -> "—", -1 -> "—"
  */
 function formatRatioNumber(value: number | undefined | null): string {
-  if (value === undefined || value === null || !Number.isFinite(value)) return "—";
+  if (value === undefined || value === null || !Number.isFinite(value) || value < 0) return "—";
   // Round to 1 decimal place
   const rounded = Math.round(value * 10) / 10;
   // Show integer if no decimal needed
@@ -98,8 +172,23 @@ function formatRatioNumber(value: number | undefined | null): string {
  * Returns "—" if value is invalid
  */
 function formatShortRatio(value: number | undefined | null): string {
-  if (value === undefined || value === null || !Number.isFinite(value)) return "—";
-  return `1:${formatRatioNumber(value)}`;
+  const formatted = formatRatioNumber(value);
+  if (formatted === "—") return "—";
+  return `1:${formatted}`;
+}
+
+/**
+ * Format a long ratio string like "1 Behandler : 3 Assistenz"
+ * Returns "—" if value is invalid
+ */
+function formatLongRatio(
+  value: number | undefined | null,
+  numeratorLabel: string,
+  denominatorLabel: string
+): string {
+  const formatted = formatRatioNumber(value);
+  if (formatted === "—") return "—";
+  return `1 ${numeratorLabel} : ${formatted} ${denominatorLabel}`;
 }
 
 function RatioCard({
@@ -126,11 +215,12 @@ function RatioCard({
   const isOptimal = score >= 80;
   const needsAttention = score < 60;
 
-  // Get unit for this ratio
-  const unitMapping = RATIO_UNIT_MAPPING[ratioKey] || { unit: ratioKey, unitFte: ratioKey };
-  const unitKey = isFteValue ? unitMapping.unitFte : unitMapping.unit;
-  const unitLabel = t(unitKey) || unitKey;
-  const providerLabel = isFteValue ? t("staff.ratioLegend.units.providerFte") : t("staff.ratioLegend.units.provider");
+  // Get unit keys with safe fallback (never undefined)
+  const { numeratorKey, denominatorKey } = getRatioUnits(ratioKey, isFteValue ?? false);
+
+  // Translate with fallback to key itself if translation missing
+  const numeratorLabel = t(numeratorKey) || numeratorKey.split('.').pop() || "Provider";
+  const denominatorLabel = t(denominatorKey) || denominatorKey.split('.').pop() || "Support";
 
   return (
     <motion.div
@@ -191,12 +281,16 @@ function RatioCard({
       {/* Ratio Legend - human readable interpretation */}
       <div className="mb-3 p-2 rounded-lg bg-white/40 text-[10px] space-y-1">
         <div className="flex justify-between text-muted-foreground">
-          <span className="font-medium">{t("staff.ratioLegend.actual")}</span>
-          <span>{formatShortRatio(actual)} (1 {providerLabel} : {formatRatioNumber(actual)} {unitLabel})</span>
+          <span className="font-medium">{t("staff.ratioLegend.actual") || "Ist:"}</span>
+          <span>
+            {formatShortRatio(actual)} ({formatLongRatio(actual, numeratorLabel, denominatorLabel)})
+          </span>
         </div>
         <div className="flex justify-between text-muted-foreground">
-          <span className="font-medium">{t("staff.ratioLegend.target")}</span>
-          <span>{formatShortRatio(optimal)} (1 {providerLabel} : {formatRatioNumber(optimal)} {unitLabel})</span>
+          <span className="font-medium">{t("staff.ratioLegend.target") || "Ziel:"}</span>
+          <span>
+            {formatShortRatio(optimal)} ({formatLongRatio(optimal, numeratorLabel, denominatorLabel)})
+          </span>
         </div>
       </div>
 
