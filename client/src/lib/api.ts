@@ -1,4 +1,4 @@
-import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep, ArchitecturalElement, InsertArchitecturalElement, ArchitecturalElementType, StepLineType } from "@shared/schema";
+import type { InsertPractice, Practice, InsertRoom, Room, InsertStaff, Staff, InsertSimulation, Simulation, KnowledgeSource, KnowledgeChunk, Workflow, WorkflowConnection, WorkflowActorType, WorkflowStep, ArchitecturalElement, InsertArchitecturalElement, ArchitecturalElementType, StepLineType, AlertSeverity } from "@shared/schema";
 
 const API_BASE = "";
 
@@ -50,7 +50,7 @@ export const api = {
 
   practices: {
     get: (id: string) => fetchAPI<Practice & { rooms: Room[]; staff: Staff[] }>(`/api/practices/${id}`),
-    create: (data: InsertPractice) => fetchAPI<Practice>("/api/practices", {
+    create: (data: Omit<InsertPractice, "ownerId">) => fetchAPI<Practice>("/api/practices", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -90,6 +90,10 @@ export const api = {
     }),
   },
 
+  hr: {
+    getKpis: (practiceId: string) => fetchAPI<HRKpiResponse>(`/api/practices/${practiceId}/hr/kpis`),
+  },
+
   elements: {
     list: (practiceId: string) => fetchAPI<ArchitecturalElement[]>(`/api/practices/${practiceId}/elements`),
     create: (practiceId: string, data: Omit<InsertArchitecturalElement, "practiceId">) =>
@@ -126,11 +130,17 @@ export const api = {
   },
 
   ai: {
-    analyzeLayout: (data: { practiceId: string; operatingHours?: number }) =>
-      fetchAPI<LayoutAnalysis>("/api/ai/analyze-layout", {
+    analyzeLayout: (data: { practiceId: string; operatingHours?: number }, options?: { force?: boolean; debug?: boolean }) => {
+      const params = new URLSearchParams();
+      if (options?.force) params.set("force", "1");
+      if (options?.debug) params.set("debug", "1");
+      const queryString = params.toString();
+      const url = `/api/ai/analyze-layout${queryString ? `?${queryString}` : ""}`;
+      return fetchAPI<LayoutAnalysis>(url, {
         method: "POST",
         body: JSON.stringify(data),
-      }),
+      });
+    },
     getRecommendation: (data: { practiceId: string; question?: string }) =>
       fetchAPI<{ recommendation: string }>("/api/ai/recommend", {
         method: "POST",
@@ -243,6 +253,7 @@ export interface LayoutAnalysis {
   recommendations: string[];
   aiInsights: string;
   workflowAnalysis?: WorkflowAnalysis;
+  analysisMeta?: AnalysisMeta;
 }
 
 export interface RoomAnalysis {
@@ -255,14 +266,47 @@ export interface RoomAnalysis {
   recommendation: string;
 }
 
+export interface StaffingDebugInfo {
+  providersCount: number;
+  clinicalAssistantsCount: number;
+  frontdeskCount: number;
+  supportTotalCount: number;
+  excludedCount: number;
+  providersFte: number;
+  clinicalAssistantsFte: number;
+  frontdeskFte: number;
+  supportTotalFte: number;
+  roleHistogram: Record<string, number>;
+  unknownRoles: string[];
+}
+
+export interface RatioMeta {
+  numerator: number;           // e.g., providersCount or providersFte
+  denominator: number;         // e.g., examRooms or clinicalAssistantsCount
+  targetDenominator: number;   // optimal * numerator
+  deltaDenominator: number;    // targetDenominator - denominator
+}
+
+export interface StaffingRatioResult {
+  actual: number;
+  optimal: number;
+  score: number;
+  recommendation: string;
+  meta?: RatioMeta;
+}
+
 export interface StaffingAnalysis {
   overallScore: number;
-  ratios: Record<string, {
-    actual: number;
-    optimal: number;
-    score: number;
-    recommendation: string;
-  }>;
+  ratios: Record<string, StaffingRatioResult>;
+  debug?: StaffingDebugInfo;
+}
+
+export interface AnalysisMeta {
+  computedAt: string;
+  fromCache: boolean;
+  forceApplied: boolean;
+  debugEnabled: boolean;
+  source: "advisor";  // Indicates which pipeline produced this analysis
 }
 
 export interface CapacityAnalysis {
@@ -392,4 +436,49 @@ export interface InventoryRulesResponse {
   byCategory: Record<string, InventoryItem[]>;
   citations: Array<{ docName: string; headingPath: string | null; chunkId: string }>;
   fromKnowledge: boolean;
+}
+
+// HR KPI Types
+export interface HRAlert {
+  severity: "info" | "warn" | "critical";
+  code: string;
+  title: string;
+  explanation: string;
+  recommendedActions: string[];
+  metric: string;
+  currentValue: number;
+  thresholdValue: number;
+}
+
+export interface HRKpiResponse {
+  timestamp: string;
+  periodStart: string;
+  periodEnd: string;
+  fte: {
+    current: number;
+    target: number;
+    quote: number;
+    delta: number;
+    status: "critical" | "warning" | "ok" | "overstaffed";
+  };
+  absence: {
+    rate: number;
+    totalDays: number;
+    byType: Record<string, number>;
+    status: "critical" | "warning" | "ok";
+  };
+  overtime: {
+    rate: number;
+    totalHours: number;
+    avgPerStaff: number;
+    status: "critical" | "warning" | "ok";
+  };
+  laborCost: {
+    ratio: number;
+    totalCost: number;
+    costPerFte: number;
+    status: "critical" | "warning" | "ok";
+  } | null;
+  overallStatus: "critical" | "warning" | "ok";
+  alerts: HRAlert[];
 }

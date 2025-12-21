@@ -118,11 +118,27 @@ export async function analyzeLayoutHandler(req: Request, res: Response) {
       return res.status(404).json({ error: "Practice not found" });
     }
 
+    // Parse query params for force and debug
+    const force = req.query.force === "1" || req.query.force === "true";
+    const debug = req.query.debug === "1" || req.query.debug === "true";
+
+    // In production, debug should be disabled unless explicitly enabled via env var
+    const isProduction = process.env.NODE_ENV === "production";
+    const allowDebugInProd = process.env.ALLOW_DEBUG_IN_PROD === "1";
+    const effectiveDebug = debug && (!isProduction || allowDebugInProd);
+
     const rooms = await storage.getRoomsByPracticeId(practiceId);
     const staff = await storage.getStaffByPracticeId(practiceId);
     const connections = await storage.getConnectionsByPracticeId(practiceId);
 
-    const analysis = await analyzeLayout(rooms, staff, operatingHours, practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER, connections);
+    const analysis = await analyzeLayout(
+      rooms,
+      staff,
+      operatingHours,
+      practice.layoutScalePxPerMeter ?? DEFAULT_LAYOUT_SCALE_PX_PER_METER,
+      connections,
+      { force, debug: effectiveDebug }
+    );
     res.json(analysis);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -404,7 +420,7 @@ export async function smartConsultantChat(req: Request, res: Response) {
     if (responseMessage.tool_calls) {
       const toolCall = responseMessage.tool_calls[0];
 
-      if (toolCall.function.name === "web_search") {
+      if (toolCall.type === "function" && toolCall.function.name === "web_search") {
         const args = JSON.parse(toolCall.function.arguments);
         console.log(`🔎 KI sucht nach: ${args.query}`);
 

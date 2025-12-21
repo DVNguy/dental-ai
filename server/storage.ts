@@ -22,6 +22,9 @@ import {
   type ArchitecturalElement,
   type InsertArchitecturalElement,
   type StepLineType,
+  type ContractType,
+  type StaffAbsence,
+  type StaffOvertime,
   users,
   practices,
   rooms,
@@ -33,7 +36,9 @@ import {
   workflows,
   workflowConnections,
   workflowSteps,
-  architecturalElements
+  architecturalElements,
+  staffAbsences,
+  staffOvertime,
 } from "@shared/schema";
 
 export interface TableStats {
@@ -227,14 +232,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStaff(staffMember: InsertStaff): Promise<Staff> {
-    const result = await db.insert(staff).values(staffMember).returning();
+    const values = {
+      ...staffMember,
+      contractType: staffMember.contractType as ContractType | undefined,
+    };
+    const result = await db.insert(staff).values(values).returning();
     return result[0];
   }
 
   async updateStaff(id: string, updates: Partial<Omit<InsertStaff, 'practiceId'>>): Promise<Staff | undefined> {
+    const setValues = {
+      ...updates,
+      contractType: updates.contractType as ContractType | undefined,
+    };
     const result = await db
       .update(staff)
-      .set(updates)
+      .set(setValues)
       .where(eq(staff.id, id))
       .returning();
     return result[0];
@@ -563,6 +576,30 @@ export class DatabaseStorage implements IStorage {
     const practice = await this.getPractice(result[0].practiceId);
     if (!practice) return undefined;
     return { element: result[0], practice };
+  }
+
+  // HR Module Methods
+
+  async getStaffAbsences(practiceId: string, periodStart: Date, periodEnd: Date): Promise<StaffAbsence[]> {
+    return await db
+      .select()
+      .from(staffAbsences)
+      .where(
+        sql`${staffAbsences.practiceId} = ${practiceId}
+            AND ${staffAbsences.startDate} <= ${periodEnd}
+            AND ${staffAbsences.endDate} >= ${periodStart}`
+      );
+  }
+
+  async getStaffOvertime(practiceId: string, periodStart: Date, periodEnd: Date): Promise<StaffOvertime[]> {
+    return await db
+      .select()
+      .from(staffOvertime)
+      .where(
+        sql`${staffOvertime.practiceId} = ${practiceId}
+            AND ${staffOvertime.date} >= ${periodStart}
+            AND ${staffOvertime.date} <= ${periodEnd}`
+      );
   }
 }
 

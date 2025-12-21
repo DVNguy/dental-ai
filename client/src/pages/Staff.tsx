@@ -1,16 +1,29 @@
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2, Pencil, RefreshCw, Bug } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { api, type LayoutAnalysis } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type LayoutAnalysis, type StaffingDebugInfo, type RatioMeta } from "@/lib/api";
 import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { Staff as StaffType } from "@shared/schema";
+import { HRKpiDashboard } from "@/components/HRKpiDashboard";
+import { AddStaffDialog } from "@/components/AddStaffDialog";
+import { EditStaffDialog } from "@/components/EditStaffDialog";
+
+// Staffing ratio benchmarks (mirrored from server/ai/benchmarks.ts for client-side defaults)
+const STAFFING_RATIOS = {
+  nursePerDoctor: { optimal: 1.5 },
+  receptionistPerProvider: { optimal: 0.4 },
+  supportStaffPerDentist: { optimal: 2.0 },
+  examRoomsPerProvider: { optimal: 3.0 }
+} as const;
 
 function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   const safeScore = typeof score === 'number' && !isNaN(score) ? Math.max(0, Math.min(100, score)) : 0;
@@ -57,24 +70,160 @@ function StaffingScoreRing({ score, size = 80 }: { score: number; size?: number 
   );
 }
 
-function RatioCard({ 
-  role, 
-  actual, 
-  optimal, 
-  score, 
+// Default fallback for unknown ratio keys
+const DEFAULT_RATIO_UNITS = {
+  numerator: "staff.ratioLegend.units.provider",
+  numeratorFte: "staff.ratioLegend.units.providerFte",
+  denominator: "staff.ratioLegend.units.supportTotal",
+  denominatorFte: "staff.ratioLegend.units.supportTotalFte",
+};
+
+// Mapping from ratio key to unit translation keys (using new i18n keys)
+// Complete mapping for all known ratio keys with FTE variants
+const RATIO_UNIT_MAPPING: Record<string, {
+  numerator: string;
+  numeratorFte: string;
+  denominator: string;
+  denominatorFte: string;
+}> = {
+  clinicalAssistantRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistant",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  clinicalAssistantFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistantFte",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  frontdeskRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.frontdesk",
+    denominatorFte: "staff.ratioLegend.units.frontdeskFte"
+  },
+  frontdeskFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.frontdeskFte",
+    denominatorFte: "staff.ratioLegend.units.frontdeskFte"
+  },
+  supportTotalRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotal",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
+  supportTotalFteRatio: {
+    numerator: "staff.ratioLegend.units.providerFte",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotalFte",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
+  examRoomRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.examRooms",
+    denominatorFte: "staff.ratioLegend.units.examRooms" // rooms don't have FTE
+  },
+  // Legacy aliases - map to correct keys to avoid crashes
+  nurseRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.clinicalAssistant",
+    denominatorFte: "staff.ratioLegend.units.clinicalAssistantFte"
+  },
+  supportStaffRatio: {
+    numerator: "staff.ratioLegend.units.provider",
+    numeratorFte: "staff.ratioLegend.units.providerFte",
+    denominator: "staff.ratioLegend.units.supportTotal",
+    denominatorFte: "staff.ratioLegend.units.supportTotalFte"
+  },
+};
+
+/**
+ * Get unit translation keys for a ratio key with safe fallback
+ * Never returns undefined - always returns valid i18n keys
+ */
+function getRatioUnits(ratioKey: string, isFte: boolean): { numeratorKey: string; denominatorKey: string } {
+  const mapping = RATIO_UNIT_MAPPING[ratioKey] || DEFAULT_RATIO_UNITS;
+  return {
+    numeratorKey: isFte ? mapping.numeratorFte : mapping.numerator,
+    denominatorKey: isFte ? mapping.denominatorFte : mapping.denominator,
+  };
+}
+
+/**
+ * Format a number for ratio display: max 1 decimal, handle NaN/Infinity/undefined/null/negative
+ * Examples: 3 -> "3", 2.5 -> "2.5", NaN -> "—", -1 -> "—"
+ */
+function formatRatioNumber(value: number | undefined | null): string {
+  if (value === undefined || value === null || !Number.isFinite(value) || value < 0) return "—";
+  // Round to 1 decimal place
+  const rounded = Math.round(value * 10) / 10;
+  // Show integer if no decimal needed
+  return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+}
+
+/**
+ * Format a short ratio string like "1:3" or "1:2.5"
+ * Returns "—" if value is invalid
+ */
+function formatShortRatio(value: number | undefined | null): string {
+  const formatted = formatRatioNumber(value);
+  if (formatted === "—") return "—";
+  return `1:${formatted}`;
+}
+
+/**
+ * Format a long ratio string like "1 Behandler : 3 Assistenz"
+ * Returns "—" if value is invalid
+ */
+function formatLongRatio(
+  value: number | undefined | null,
+  numeratorLabel: string,
+  denominatorLabel: string
+): string {
+  const formatted = formatRatioNumber(value);
+  if (formatted === "—") return "—";
+  return `1 ${numeratorLabel} : ${formatted} ${denominatorLabel}`;
+}
+
+function RatioCard({
+  role,
+  ratioKey,
+  actual,
+  optimal,
+  score,
   recommendation,
-  t 
-}: { 
-  role: string; 
-  actual: number; 
-  optimal: number; 
-  score: number; 
+  headcountActual,
+  isFteValue,
+  meta,
+  t
+}: {
+  role: string;
+  ratioKey: string;
+  actual: number;
+  optimal: number;
+  score: number;
   recommendation: string;
+  headcountActual?: number;  // Show headcount as secondary info when FTE is primary
+  isFteValue?: boolean;      // Indicates if actual is an FTE value
+  meta?: RatioMeta;          // Absolute values for detailed display
   t: (key: string) => string;
 }) {
   const isOptimal = score >= 80;
   const needsAttention = score < 60;
-  
+
+  // Get unit keys with safe fallback (never undefined)
+  const { numeratorKey, denominatorKey } = getRatioUnits(ratioKey, isFteValue ?? false);
+
+  // Translate with fallback to key itself if translation missing
+  const numeratorLabel = t(numeratorKey) || numeratorKey.split('.').pop() || "Provider";
+  const denominatorLabel = t(denominatorKey) || denominatorKey.split('.').pop() || "Support";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -98,8 +247,8 @@ function RatioCard({
           )}
           <span className="font-semibold text-xs capitalize truncate">{role}</span>
         </div>
-        <Badge 
-          variant="secondary" 
+        <Badge
+          variant="secondary"
           className={cn(
             "text-[9px] px-1.5 py-0.5 shrink-0 text-center leading-tight",
             isOptimal ? "bg-green-100 text-green-700" :
@@ -111,18 +260,75 @@ function RatioCard({
           <span className="block font-normal">{t("staff.match")}</span>
         </Badge>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4 mb-3">
         <div className="text-center p-2 rounded-lg bg-white/60">
-          <div className="text-lg font-bold text-foreground">{actual}</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.current")}</div>
+          <div className="text-lg font-bold text-foreground">{actual.toFixed(2)}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {isFteValue ? t("staff.currentFte") : t("staff.current")}
+          </div>
+          {/* Show headcount as secondary info when FTE is displayed */}
+          {isFteValue && headcountActual !== undefined && (
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              ({headcountActual.toFixed(1)} {t("staff.headcount")})
+            </div>
+          )}
         </div>
         <div className="text-center p-2 rounded-lg bg-white/60">
           <div className="text-lg font-bold text-primary">{optimal}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("staff.optimal")}</div>
         </div>
       </div>
-      
+
+      {/* Ratio Legend - human readable interpretation */}
+      <div className="mb-3 p-2 rounded-lg bg-white/40 text-[10px] space-y-1">
+        <div className="flex justify-between text-muted-foreground">
+          <span className="font-medium">{t("staff.ratioLegend.actual") || "Ist:"}</span>
+          <span>
+            {formatShortRatio(actual)} ({formatLongRatio(actual, numeratorLabel, denominatorLabel)})
+          </span>
+        </div>
+        <div className="flex justify-between text-muted-foreground">
+          <span className="font-medium">{t("staff.ratioLegend.target") || "Ziel:"}</span>
+          <span>
+            {formatShortRatio(optimal)} ({formatLongRatio(optimal, numeratorLabel, denominatorLabel)})
+          </span>
+        </div>
+      </div>
+
+      {/* Absolute Values Section - Shows actual target/delta for easier understanding */}
+      {meta && meta.numerator > 0 && (
+        <div className="mb-3 p-2 rounded-lg bg-white/60 border border-dashed border-muted-foreground/30 text-[10px] space-y-1">
+          <div className="text-muted-foreground font-medium mb-1">
+            {t("staff.ratioLegend.basedOn") || "Bei"} {formatRatioNumber(meta.numerator)} {numeratorLabel}:
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.actualTotal") || "Ist"}</div>
+              <div className="font-semibold text-foreground">{formatRatioNumber(meta.denominator)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.targetTotal") || "Ziel"}</div>
+              <div className="font-semibold text-primary">{formatRatioNumber(meta.targetDenominator)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.deltaTotal") || "Delta"}</div>
+              <div className={cn(
+                "font-semibold",
+                meta.deltaDenominator > 0.05 ? "text-amber-600" :
+                meta.deltaDenominator < -0.05 ? "text-blue-600" :
+                "text-green-600"
+              )}>
+                {meta.deltaDenominator > 0 ? "+" : ""}{formatRatioNumber(meta.deltaDenominator)}
+              </div>
+            </div>
+          </div>
+          <div className="text-muted-foreground/70 text-center">
+            {denominatorLabel}
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground leading-relaxed">{recommendation}</p>
     </motion.div>
   );
@@ -131,65 +337,196 @@ function RatioCard({
 function StaffingInsightsSkeleton({ t }: { t: (key: string) => string }) {
   return (
     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-5 w-5 rounded" />
-          <Skeleton className="h-6 w-48" />
-        </div>
-        <Skeleton className="h-4 w-64" />
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="p-4 rounded-xl border bg-white/50">
-              <Skeleton className="h-5 w-32 mb-3" />
-              <div className="grid grid-cols-2 gap-4 mb-3">
-                <Skeleton className="h-16 rounded-lg" />
-                <Skeleton className="h-16 rounded-lg" />
-              </div>
-              <Skeleton className="h-4 w-full" />
-            </div>
-          ))}
+      <CardContent className="py-6">
+        <div className="flex items-center justify-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+          <span className="text-sm text-muted-foreground">{t("staff.loadingInsights")}</span>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | null; t: (key: string) => string }) {
+function StaffingDebugPanel({ debug, meta, t }: {
+  debug: StaffingDebugInfo;
+  meta?: { computedAt: string; fromCache: boolean; forceApplied: boolean; debugEnabled: boolean };
+  t: (key: string) => string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <details
+      className="mt-4 p-3 rounded-lg bg-slate-100 border border-slate-300 text-xs"
+      open={isOpen}
+      onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className="cursor-pointer font-medium text-slate-700 flex items-center gap-2">
+        <Bug className="h-4 w-4" />
+        {t("staff.debugInfo") || "Debug Info"}
+        {meta && (
+          <span className="ml-auto text-slate-500">
+            {meta.fromCache ? "Cache" : "Fresh"} | {new Date(meta.computedAt).toLocaleTimeString()}
+          </span>
+        )}
+      </summary>
+      <div className="mt-3 space-y-3">
+        {/* Counts */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Providers</div>
+            <div className="font-bold text-lg">{debug.providersCount}</div>
+            <div className="text-slate-400">FTE: {debug.providersFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Clinical</div>
+            <div className="font-bold text-lg">{debug.clinicalAssistantsCount}</div>
+            <div className="text-slate-400">FTE: {debug.clinicalAssistantsFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Frontdesk</div>
+            <div className="font-bold text-lg">{debug.frontdeskCount}</div>
+            <div className="text-slate-400">FTE: {debug.frontdeskFte.toFixed(1)}</div>
+          </div>
+          <div className="p-2 bg-white rounded border">
+            <div className="text-slate-500">Excluded</div>
+            <div className="font-bold text-lg">{debug.excludedCount}</div>
+          </div>
+        </div>
+
+        {/* Role Histogram */}
+        {Object.keys(debug.roleHistogram).length > 0 && (
+          <div>
+            <div className="font-medium text-slate-600 mb-1">{t("staff.roleHistogram") || "Role Histogram"}</div>
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(debug.roleHistogram).map(([role, count]) => (
+                <Badge key={role} variant="outline" className="text-xs">
+                  {role}: {count}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Unknown Roles */}
+        {debug.unknownRoles.length > 0 && (
+          <div className="p-2 bg-amber-50 border border-amber-200 rounded">
+            <div className="font-medium text-amber-700 mb-1">{t("staff.unknownRoles") || "Unknown Roles"}</div>
+            <div className="flex flex-wrap gap-1">
+              {debug.unknownRoles.map((role) => (
+                <Badge key={role} variant="outline" className="text-xs bg-amber-100 border-amber-300 text-amber-800">
+                  {role}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function StaffingInsightsSection({
+  analysis,
+  t,
+  onForceRefresh,
+  isRefreshing
+}: {
+  analysis: LayoutAnalysis | null;
+  t: (key: string) => string;
+  onForceRefresh?: () => void;
+  isRefreshing?: boolean;
+}) {
   const staffingAnalysis = analysis?.staffingAnalysis || { overallScore: 0, ratios: {} };
   const staffingScore = analysis?.staffingScore ?? 50;
-  const ratioEntries = Object.entries(staffingAnalysis.ratios || {});
+  const ratios = staffingAnalysis.ratios || {};
   const hasRooms = (analysis?.roomAnalyses?.length ?? 0) > 0;
-  const hasRatioData = ratioEntries.length > 0;
-  
-  const BENCHMARK_RATIOS = [
-    {
-      role: t("benchmarks.supportStaffRatio"),
+  const hasRatioData = Object.keys(ratios).length > 0;
+  const debug = staffingAnalysis.debug;
+  const meta = analysis?.analysisMeta;
+
+  // Check if we have providers - if not, ratios will be 0
+  const noProviders = debug?.providersCount === 0;
+
+  // Mapping from base ratio key to its FTE variant key
+  const fteKeyMapping: Record<string, string> = {
+    "clinicalAssistantRatio": "clinicalAssistantFteRatio",
+    "frontdeskRatio": "frontdeskFteRatio",
+    "supportTotalRatio": "supportTotalFteRatio"
+  };
+
+  // Preferred display order for ratio keys
+  const ratioDisplayOrder = [
+    "clinicalAssistantRatio",
+    "frontdeskRatio",
+    "supportTotalRatio",
+    "examRoomRatio"
+  ];
+
+  // Map backend ratio keys to translated labels
+  const getRatioLabel = (key: string, isFte: boolean): string => {
+    // Use FTE label if available and isFte is true
+    const labelKey = isFte ? `benchmarks.ratioLabels.${fteKeyMapping[key] || key}` : `benchmarks.ratioLabels.${key}`;
+    const label = t(labelKey);
+    // If translation exists, use it; otherwise fall back to base key
+    if (!label.startsWith("benchmarks.ratioLabels.")) {
+      return label;
+    }
+    // Fallback to base key label
+    const baseLabel = t(`benchmarks.ratioLabels.${key}`);
+    return baseLabel.startsWith("benchmarks.ratioLabels.") ? key : baseLabel;
+  };
+
+  // Default fallback values for each ratio key (used when backend doesn't return a key)
+  const ratioDefaults: Record<string, { actual: number; optimal: number; score: number; recommendation: string }> = {
+    clinicalAssistantRatio: {
       actual: 0,
-      optimal: 2.0,
-      score: 0,
-      recommendation: t("benchmarks.supportStaffDesc")
-    },
-    {
-      role: t("benchmarks.nurseToDoctor"),
-      actual: 0,
-      optimal: 1.5,
+      optimal: STAFFING_RATIOS.nursePerDoctor.optimal,
       score: 0,
       recommendation: t("benchmarks.nurseToDoctorDesc")
     },
-    {
-      role: t("benchmarks.examRoomsPerProvider"),
+    frontdeskRatio: {
       actual: 0,
-      optimal: 2.5,
+      optimal: STAFFING_RATIOS.receptionistPerProvider.optimal,
+      score: 0,
+      recommendation: t("benchmarks.frontdeskRatioDesc")
+    },
+    supportTotalRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.supportStaffPerDentist.optimal,
+      score: 0,
+      recommendation: t("benchmarks.supportStaffDesc")
+    },
+    examRoomRatio: {
+      actual: 0,
+      optimal: STAFFING_RATIOS.examRoomsPerProvider.optimal,
       score: 0,
       recommendation: t("benchmarks.examRoomsPerProviderDesc")
     }
-  ];
-  
-  const displayRatios = hasRatioData 
-    ? ratioEntries.map(([role, data]) => ({ role, ...data }))
-    : BENCHMARK_RATIOS;
+  };
+
+  // Build display ratios - ALWAYS show all 4 primary ratios in fixed order
+  // Use backend data when available, fallback to defaults otherwise
+  const displayRatios = ratioDisplayOrder.map(key => {
+    // Use backend data if available, otherwise use defaults
+    const baseData = ratios[key] ?? ratioDefaults[key];
+    const fteKey = fteKeyMapping[key];
+    const fteData = fteKey ? ratios[fteKey] : undefined;
+
+    // Use FTE as primary value if available and > 0
+    const useFte = fteData !== undefined && fteData.actual > 0;
+
+    return {
+      ratioKey: key,  // Keep the original key for unit mapping
+      role: getRatioLabel(key, useFte),
+      actual: useFte ? fteData.actual : baseData.actual,
+      optimal: baseData.optimal,
+      score: baseData.score,
+      recommendation: useFte ? fteData.recommendation : baseData.recommendation,
+      headcountActual: useFte ? baseData.actual : undefined,
+      isFteValue: useFte,
+      meta: useFte ? fteData.meta : baseData.meta
+    };
+  });
   
   return (
     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 overflow-hidden" data-testid="staffing-insights-card">
@@ -206,10 +543,25 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
               </CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-3 bg-white/10 rounded-xl p-3">
-            <StaffingScoreRing score={staffingScore} size={60} />
-            <div className="text-right">
-              <div className="text-xs text-blue-100">{t("staff.staffingOptimization")}</div>
+          <div className="flex items-center gap-3">
+            {onForceRefresh && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onForceRefresh}
+                disabled={isRefreshing}
+                className="text-white hover:bg-white/20"
+                data-testid="force-refresh-button"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-1", isRefreshing && "animate-spin")} />
+                {t("staff.refreshAnalysis") || "Neu berechnen"}
+              </Button>
+            )}
+            <div className="bg-white/10 rounded-xl p-3 flex items-center gap-3">
+              <StaffingScoreRing score={staffingScore} size={60} />
+              <div className="text-right">
+                <div className="text-xs text-blue-100">{t("staff.staffingOptimization")}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -237,12 +589,16 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {displayRatios.map((data) => (
             <RatioCard
-              key={data.role}
+              key={data.ratioKey}
+              ratioKey={data.ratioKey}
               role={data.role}
               actual={data.actual}
               optimal={data.optimal}
               score={data.score}
               recommendation={data.recommendation}
+              headcountActual={data.headcountActual}
+              isFteValue={data.isFteValue}
+              meta={data.meta}
               t={t}
             />
           ))}
@@ -281,6 +637,30 @@ function StaffingInsightsSection({ analysis, t }: { analysis: LayoutAnalysis | n
             </div>
           </motion.div>
         )}
+
+        {/* Warning when no providers detected */}
+        {noProviders && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3"
+            data-testid="no-providers-warning"
+          >
+            <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-800 mb-1">
+                {t("staff.noProvidersWarning") || "Kein Behandler erkannt"}
+              </p>
+              <p className="text-xs text-red-700">
+                {t("staff.noProvidersHint") ||
+                  "Kein Behandler (Zahnarzt/Arzt) in Staff-Daten erkannt – Ratios pro Behandler bleiben 0. Legen Sie mindestens einen Staff mit Rolle 'dentist', 'zahnarzt' oder 'arzt' an."}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Debug panel (only shown when debug data is present) */}
+        {debug && <StaffingDebugPanel debug={debug} meta={meta} t={t} />}
       </CardContent>
     </Card>
   );
@@ -317,10 +697,18 @@ function getRoleLabel(role: string, t: (key: string) => string): string {
   return roleMap[role] || role;
 }
 
-function StaffCard({ member, t }: { member: StaffType; t: (key: string) => string }) {
+function StaffCard({
+  member,
+  t,
+  onEdit
+}: {
+  member: StaffType;
+  t: (key: string) => string;
+  onEdit: (member: StaffType) => void;
+}) {
   return (
-    <Card 
-      className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary"
+    <Card
+      className="overflow-hidden hover:shadow-lg transition-all duration-300 border-t-4 border-t-transparent hover:border-t-primary group"
       data-testid={`staff-card-${member.id}`}
     >
       <CardHeader className="flex flex-row items-center gap-4 pb-2">
@@ -333,8 +721,42 @@ function StaffCard({ member, t }: { member: StaffType; t: (key: string) => strin
           <CardTitle className="text-lg">{member.name}</CardTitle>
           <CardDescription>{getRoleLabel(member.role, t)}</CardDescription>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={() => onEdit(member)}
+          data-testid={`edit-staff-${member.id}`}
+        >
+          <Pencil className="h-4 w-4" />
+          <span className="sr-only">{t("common.edit")}</span>
+        </Button>
       </CardHeader>
       <CardContent>
+        {/* HR Info */}
+        <div className="flex flex-wrap gap-2 mb-3 text-xs text-muted-foreground">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="font-normal cursor-help">
+                  {(t as (key: string, opts?: Record<string, unknown>) => string)("staff.fteLabel", { value: member.fte ?? 1.0 })}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t("staff.fteTooltip")}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Badge variant="outline" className="font-normal">
+            {(t as (key: string, opts?: Record<string, unknown>) => string)("staff.hoursPerWeek", { value: member.weeklyHours ?? 40 })}
+          </Badge>
+          {member.contractType && (
+            <Badge variant="outline" className="font-normal">
+              {t(`staff.contractTypes.${member.contractType}`)}
+            </Badge>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-2 mb-4">
           {member.specializations.map(spec => (
             <Badge key={spec} variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none font-normal">
@@ -367,13 +789,41 @@ function EmptyStaffState({ t }: { t: (key: string) => string }) {
 export default function Staff() {
   const { t } = useTranslation();
   const { practiceId, practice } = usePractice();
+  const queryClient = useQueryClient();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffType | null>(null);
+  const [isForceRefreshing, setIsForceRefreshing] = useState(false);
 
-  const { data: analysis, isLoading } = useQuery({
+  const handleEditStaff = (member: StaffType) => {
+    setSelectedStaff(member);
+    setIsEditDialogOpen(true);
+  };
+
+  const { data: analysis, isLoading, refetch } = useQuery({
     queryKey: ["ai-analysis", practiceId],
-    queryFn: () => api.ai.analyzeLayout({ practiceId: practiceId!, operatingHours: 8 }),
+    queryFn: () => api.ai.analyzeLayout({ practiceId: practiceId!, operatingHours: 8 }, { debug: true }),
     enabled: !!practiceId,
     staleTime: 30000,
   });
+
+  // Force refresh with force=1 and debug=1
+  const handleForceRefresh = async () => {
+    if (!practiceId) return;
+    setIsForceRefreshing(true);
+    try {
+      const freshAnalysis = await api.ai.analyzeLayout(
+        { practiceId, operatingHours: 8 },
+        { force: true, debug: true }
+      );
+      // Update the cache with the fresh result
+      queryClient.setQueryData(["ai-analysis", practiceId], freshAnalysis);
+    } catch (error) {
+      console.error("Force refresh failed:", error);
+    } finally {
+      setIsForceRefreshing(false);
+    }
+  };
 
   const staffMembers = practice?.staff || [];
 
@@ -384,16 +834,31 @@ export default function Staff() {
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary" data-testid="text-staff-title">{t("staff.title")}</h2>
           <p className="text-sm md:text-base text-muted-foreground">{t("staff.subtitle")}</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 w-full sm:w-auto" data-testid="button-add-staff">
+        <Button
+          className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+          data-testid="button-add-staff"
+          onClick={() => setIsAddDialogOpen(true)}
+        >
           <Plus className="mr-2 h-4 w-4" /> {t("staff.add")}
         </Button>
       </div>
 
+      {/* HR KPI Dashboard - Shows FTE, Overtime, Absence, Labor Cost */}
+      <div className="mb-8">
+        <HRKpiDashboard />
+      </div>
+
+      {/* AI Staffing Insights - Shows role ratios and benchmarks */}
       <div className="mb-8">
         {isLoading ? (
           <StaffingInsightsSkeleton t={t} />
         ) : (
-          <StaffingInsightsSection analysis={analysis ?? null} t={t} />
+          <StaffingInsightsSection
+            analysis={analysis ?? null}
+            t={t}
+            onForceRefresh={handleForceRefresh}
+            isRefreshing={isForceRefreshing}
+          />
         )}
       </div>
 
@@ -408,12 +873,19 @@ export default function Staff() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {staffMembers.length > 0 ? (
           staffMembers.map((member) => (
-            <StaffCard key={member.id} member={member} t={t} />
+            <StaffCard key={member.id} member={member} t={t} onEdit={handleEditStaff} />
           ))
         ) : (
           <EmptyStaffState t={t} />
         )}
       </div>
+
+      <AddStaffDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+      <EditStaffDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        staff={selectedStaff}
+      />
     </div>
   );
 }

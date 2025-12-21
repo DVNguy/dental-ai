@@ -15,6 +15,7 @@ import {
 import { computeLayoutEfficiency } from "./ai/layoutEfficiency";
 import { normalizeRoomType } from "@shared/roomTypes";
 import { pxToM } from "@shared/units";
+import { classifyStaffForRatios } from "./ai/staffRoleClassifier";
 
 export interface SimulationParameters {
   patientVolume: number;
@@ -88,18 +89,22 @@ async function calculateEfficiencyScore(
 function calculateHarmonyScore(staff: Staff[], rooms: Room[]): number {
   if (staff.length === 0) return 50;
 
-  const doctors = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
-  const nurses = staff.filter(s => s.role === "nurse").length;
-  const receptionists = staff.filter(s => s.role === "receptionist").length;
-  const examRooms = rooms.filter(r => r.type === "exam").length;
+  // Use centralized classifier for consistent role classification
+  const classification = classifyStaffForRatios(staff);
+  const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam").length;
 
-  const staffingAnalysis = evaluateStaffingRatios(
-    doctors, 
-    nurses, 
-    receptionists, 
-    staff.length, 
+  const staffingAnalysis = evaluateStaffingRatios({
+    providersCount: classification.providersCount,
+    clinicalAssistantsCount: classification.clinicalAssistantsCount,
+    frontdeskCount: classification.frontdeskCount,
+    supportTotalCount: classification.supportTotalCount,
+    providersFte: classification.providersFte,
+    clinicalAssistantsFte: classification.clinicalAssistantsFte,
+    frontdeskFte: classification.frontdeskFte,
+    supportTotalFte: classification.supportTotalFte,
+    totalStaff: staff.length,
     examRooms
-  );
+  });
 
   let score = staffingAnalysis.overallScore;
 
@@ -148,24 +153,26 @@ async function loadSchedulingDefaults(): Promise<SchedulingDefaults> {
 }
 
 function calculatePatientCapacity(
-  rooms: Room[], 
-  staff: Staff[], 
+  rooms: Room[],
+  staff: Staff[],
   operatingHours: number,
   schedulingDefaults?: SchedulingDefaults
 ): number {
-  const examRooms = rooms.filter(r => r.type === "exam");
-  const doctors = staff.filter(s => s.role === "doctor" || s.role === "dentist").length;
-  
+  const examRooms = rooms.filter(r => normalizeRoomType(r.type) === "exam");
+  // Use centralized classifier for consistent role classification
+  const classification = classifyStaffForRatios(staff);
+  const providers = classification.providersCount;
+
   const patientsPerRoomPerDay = PATIENT_FLOW_METRICS.patientsPerExamRoomPerDay.acceptable;
-  
+
   let throughputPerHour = PATIENT_FLOW_METRICS.patientThroughputPerHour.acceptable;
   if (schedulingDefaults) {
     const totalServiceTime = schedulingDefaults.avgServiceTime + schedulingDefaults.bufferMinutes;
     throughputPerHour = Math.max(1, Math.round(60 / Math.max(1, totalServiceTime)));
   }
-  
+
   const roomBasedCapacity = examRooms.length * patientsPerRoomPerDay;
-  const providerBasedCapacity = doctors * throughputPerHour * operatingHours;
+  const providerBasedCapacity = providers * throughputPerHour * operatingHours;
   
   let capacity = Math.min(roomBasedCapacity, providerBasedCapacity);
   

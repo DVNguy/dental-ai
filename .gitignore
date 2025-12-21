@@ -12,3 +12,12 @@ vite.config.ts.*
 .env
 .env.local
 npm-debug.log
+# local secrets
+secrets.env
+repomix-output.xml
+
+# Replit Agent State (kann Secrets enthalten!)
+.local/
+
+# Attached assets (Replit artifacts)
+attached_assets/
