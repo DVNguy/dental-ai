@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Plus, Star, Users, TrendingUp, AlertTriangle, CheckCircle, Lightbulb, Loader2, Pencil, RefreshCw, Bug } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type LayoutAnalysis, type StaffingDebugInfo } from "@/lib/api";
+import { api, type LayoutAnalysis, type StaffingDebugInfo, type RatioMeta } from "@/lib/api";
 import { usePractice } from "@/contexts/PracticeContext";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -200,6 +200,7 @@ function RatioCard({
   recommendation,
   headcountActual,
   isFteValue,
+  meta,
   t
 }: {
   role: string;
@@ -210,6 +211,7 @@ function RatioCard({
   recommendation: string;
   headcountActual?: number;  // Show headcount as secondary info when FTE is primary
   isFteValue?: boolean;      // Indicates if actual is an FTE value
+  meta?: RatioMeta;          // Absolute values for detailed display
   t: (key: string) => string;
 }) {
   const isOptimal = score >= 80;
@@ -293,6 +295,39 @@ function RatioCard({
           </span>
         </div>
       </div>
+
+      {/* Absolute Values Section - Shows actual target/delta for easier understanding */}
+      {meta && meta.numerator > 0 && (
+        <div className="mb-3 p-2 rounded-lg bg-white/60 border border-dashed border-muted-foreground/30 text-[10px] space-y-1">
+          <div className="text-muted-foreground font-medium mb-1">
+            {t("staff.ratioLegend.basedOn") || "Bei"} {formatRatioNumber(meta.numerator)} {numeratorLabel}:
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.actualTotal") || "Ist"}</div>
+              <div className="font-semibold text-foreground">{formatRatioNumber(meta.denominator)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.targetTotal") || "Ziel"}</div>
+              <div className="font-semibold text-primary">{formatRatioNumber(meta.targetDenominator)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground/70">{t("staff.ratioLegend.deltaTotal") || "Delta"}</div>
+              <div className={cn(
+                "font-semibold",
+                meta.deltaDenominator > 0.05 ? "text-amber-600" :
+                meta.deltaDenominator < -0.05 ? "text-blue-600" :
+                "text-green-600"
+              )}>
+                {meta.deltaDenominator > 0 ? "+" : ""}{formatRatioNumber(meta.deltaDenominator)}
+              </div>
+            </div>
+          </div>
+          <div className="text-muted-foreground/70 text-center">
+            {denominatorLabel}
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground leading-relaxed">{recommendation}</p>
     </motion.div>
@@ -488,7 +523,8 @@ function StaffingInsightsSection({
       score: baseData.score,
       recommendation: useFte ? fteData.recommendation : baseData.recommendation,
       headcountActual: useFte ? baseData.actual : undefined,
-      isFteValue: useFte
+      isFteValue: useFte,
+      meta: useFte ? fteData.meta : baseData.meta
     };
   });
   
@@ -562,6 +598,7 @@ function StaffingInsightsSection({
               recommendation={data.recommendation}
               headcountActual={data.headcountActual}
               isFteValue={data.isFteValue}
+              meta={data.meta}
               t={t}
             />
           ))}

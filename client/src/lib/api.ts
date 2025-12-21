@@ -280,14 +280,24 @@ export interface StaffingDebugInfo {
   unknownRoles: string[];
 }
 
+export interface RatioMeta {
+  numerator: number;           // e.g., providersCount or providersFte
+  denominator: number;         // e.g., examRooms or clinicalAssistantsCount
+  targetDenominator: number;   // optimal * numerator
+  deltaDenominator: number;    // targetDenominator - denominator
+}
+
+export interface StaffingRatioResult {
+  actual: number;
+  optimal: number;
+  score: number;
+  recommendation: string;
+  meta?: RatioMeta;
+}
+
 export interface StaffingAnalysis {
   overallScore: number;
-  ratios: Record<string, {
-    actual: number;
-    optimal: number;
-    score: number;
-    recommendation: string;
-  }>;
+  ratios: Record<string, StaffingRatioResult>;
   debug?: StaffingDebugInfo;
 }
 

@@ -376,11 +376,30 @@ export interface StaffingRatioInput {
  *
  * @param input - Staffing counts and FTE values
  */
+/**
+ * Meta information for absolute target/actual/delta calculations.
+ * Only present when numerator > 0 and denominator >= 0.
+ */
+export interface RatioMeta {
+  numerator: number;           // e.g., providersCount or providersFte
+  denominator: number;         // e.g., examRooms or clinicalAssistantsCount
+  targetDenominator: number;   // optimal * numerator
+  deltaDenominator: number;    // targetDenominator - denominator
+}
+
+export interface RatioResult {
+  actual: number;
+  optimal: number;
+  score: number;
+  recommendation: string;
+  meta?: RatioMeta;
+}
+
 export function evaluateStaffingRatios(
   input: StaffingRatioInput
 ): {
   overallScore: number;
-  ratios: Record<string, { actual: number; optimal: number; score: number; recommendation: string }>;
+  ratios: Record<string, RatioResult>;
 } {
   const {
     providersCount,
@@ -395,7 +414,24 @@ export function evaluateStaffingRatios(
     practiceType = "dental"
   } = input;
 
-  const ratios: Record<string, { actual: number; optimal: number; score: number; recommendation: string }> = {};
+  const ratios: Record<string, RatioResult> = {};
+
+  /**
+   * Creates a RatioMeta object for absolute value display.
+   * Note: For staff ratios, numerator = providers, denominator = staff/rooms
+   *       targetDenominator = optimal * numerator (what we SHOULD have)
+   *       deltaDenominator = targetDenominator - denominator (positive = need more)
+   */
+  function createMeta(numerator: number, denominator: number, optimal: number): RatioMeta | undefined {
+    if (numerator <= 0) return undefined;
+    const targetDenominator = optimal * numerator;
+    return {
+      numerator,
+      denominator,
+      targetDenominator,
+      deltaDenominator: targetDenominator - denominator
+    };
+  }
 
   // Keys used for overallScore calculation (to prevent unintended score changes)
   // Only these keys contribute to the overall score
@@ -425,7 +461,13 @@ export function evaluateStaffingRatios(
       recommendation = `Ausgezeichnetes MFA/ZFA-zu-Behandler-Verhältnis von ${clinicalRatio.toFixed(1)}.`;
     }
 
-    ratios.clinicalAssistantRatio = { actual: clinicalRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+    ratios.clinicalAssistantRatio = {
+      actual: clinicalRatio,
+      optimal: benchmark.optimal,
+      score: Math.round(score),
+      recommendation,
+      meta: createMeta(providersCount, clinicalAssistantsCount, benchmark.optimal)
+    };
   } else {
     ratios.clinicalAssistantRatio = {
       actual: 0,
@@ -457,7 +499,13 @@ export function evaluateStaffingRatios(
       recommendation = `Gutes Empfangsverhältnis von ${fdRatio.toFixed(2)} pro Behandler.`;
     }
 
-    ratios.frontdeskRatio = { actual: fdRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+    ratios.frontdeskRatio = {
+      actual: fdRatio,
+      optimal: benchmark.optimal,
+      score: Math.round(score),
+      recommendation,
+      meta: createMeta(providersCount, frontdeskCount, benchmark.optimal)
+    };
   } else {
     ratios.frontdeskRatio = {
       actual: 0,
@@ -488,7 +536,13 @@ export function evaluateStaffingRatios(
       recommendation = `Gutes Personalverhältnis von ${supportRatio.toFixed(1)} Mitarbeitern pro Behandler.`;
     }
 
-    ratios.supportTotalRatio = { actual: supportRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+    ratios.supportTotalRatio = {
+      actual: supportRatio,
+      optimal: benchmark.optimal,
+      score: Math.round(score),
+      recommendation,
+      meta: createMeta(providersCount, supportTotalCount, benchmark.optimal)
+    };
   } else {
     ratios.supportTotalRatio = {
       actual: 0,
@@ -508,7 +562,8 @@ export function evaluateStaffingRatios(
         actual: clinicalFteRatio,
         optimal: benchmark.optimal,
         score: ratios.clinicalAssistantRatio.score, // Use same score logic
-        recommendation: `MFA/ZFA-FTE-Verhältnis: ${clinicalFteRatio.toFixed(2)} pro Behandler-VZÄ.`
+        recommendation: `MFA/ZFA-FTE-Verhältnis: ${clinicalFteRatio.toFixed(2)} pro Behandler-VZÄ.`,
+        meta: createMeta(providersFte, clinicalAssistantsFte, benchmark.optimal)
       };
     }
 
@@ -520,7 +575,8 @@ export function evaluateStaffingRatios(
         actual: fdFteRatio,
         optimal: benchmark.optimal,
         score: ratios.frontdeskRatio.score, // Use same score logic
-        recommendation: `Empfangs-FTE-Verhältnis: ${fdFteRatio.toFixed(2)} pro Behandler-VZÄ.`
+        recommendation: `Empfangs-FTE-Verhältnis: ${fdFteRatio.toFixed(2)} pro Behandler-VZÄ.`,
+        meta: createMeta(providersFte, frontdeskFte, benchmark.optimal)
       };
     }
 
@@ -534,7 +590,8 @@ export function evaluateStaffingRatios(
         actual: supportFteRatio,
         optimal: benchmark.optimal,
         score: ratios.supportTotalRatio.score, // Use same score logic
-        recommendation: `Support-FTE-Verhältnis: ${supportFteRatio.toFixed(2)} pro Behandler-VZÄ.`
+        recommendation: `Support-FTE-Verhältnis: ${supportFteRatio.toFixed(2)} pro Behandler-VZÄ.`,
+        meta: createMeta(providersFte, supportTotalFte, benchmark.optimal)
       };
     }
   }
@@ -558,13 +615,20 @@ export function evaluateStaffingRatios(
       recommendation = `Gutes Verhältnis von ${roomRatio.toFixed(1)} Behandlungsräumen pro Behandler.`;
     }
 
-    ratios.examRoomRatio = { actual: roomRatio, optimal: benchmark.optimal, score: Math.round(score), recommendation };
+    ratios.examRoomRatio = {
+      actual: roomRatio,
+      optimal: benchmark.optimal,
+      score: Math.round(score),
+      recommendation,
+      meta: createMeta(providersCount, examRooms, benchmark.optimal)
+    };
   } else if (providersCount > 0 && examRooms === 0) {
     ratios.examRoomRatio = {
       actual: 0,
       optimal: STAFFING_RATIOS.examRoomsPerProvider.optimal,
       score: 0,
-      recommendation: "Keine Behandlungsräume vorhanden. Fügen Sie Behandlungsräume hinzu."
+      recommendation: "Keine Behandlungsräume vorhanden. Fügen Sie Behandlungsräume hinzu.",
+      meta: createMeta(providersCount, 0, STAFFING_RATIOS.examRoomsPerProvider.optimal)
     };
   } else {
     ratios.examRoomRatio = {

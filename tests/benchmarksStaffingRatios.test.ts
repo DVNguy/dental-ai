@@ -733,4 +733,239 @@ describe("evaluateStaffingRatios", () => {
       console.log("All zeros test - keys in output:", Object.keys(result.ratios).sort().join(", "));
     });
   });
+
+  // ==========================================================================
+  // Meta Field Tests (Absolute Values: numerator, denominator, target, delta)
+  // ==========================================================================
+  describe("RatioMeta Absolute Values", () => {
+    it("should include meta field for all primary ratios when providers > 0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 6,
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      // All primary ratios should have meta
+      assert.ok(result.ratios.clinicalAssistantRatio.meta, "clinicalAssistantRatio should have meta");
+      assert.ok(result.ratios.frontdeskRatio.meta, "frontdeskRatio should have meta");
+      assert.ok(result.ratios.supportTotalRatio.meta, "supportTotalRatio should have meta");
+      assert.ok(result.ratios.examRoomRatio.meta, "examRoomRatio should have meta");
+    });
+
+    it("should calculate meta.numerator as providersCount", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 6,
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      assert.strictEqual(result.ratios.clinicalAssistantRatio.meta?.numerator, 2);
+      assert.strictEqual(result.ratios.frontdeskRatio.meta?.numerator, 2);
+      assert.strictEqual(result.ratios.supportTotalRatio.meta?.numerator, 2);
+      assert.strictEqual(result.ratios.examRoomRatio.meta?.numerator, 2);
+    });
+
+    it("should calculate meta.denominator correctly for each ratio", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 6,
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      assert.strictEqual(result.ratios.clinicalAssistantRatio.meta?.denominator, 3, "denominator = clinicalAssistantsCount");
+      assert.strictEqual(result.ratios.frontdeskRatio.meta?.denominator, 1, "denominator = frontdeskCount");
+      assert.strictEqual(result.ratios.supportTotalRatio.meta?.denominator, 4, "denominator = supportTotalCount");
+      assert.strictEqual(result.ratios.examRoomRatio.meta?.denominator, 6, "denominator = examRooms");
+    });
+
+    it("should calculate meta.targetDenominator = optimal * numerator", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 6,
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      // clinicalAssistantRatio: optimal=1.5, providers=2 => target=3.0
+      assert.strictEqual(
+        result.ratios.clinicalAssistantRatio.meta?.targetDenominator,
+        STAFFING_RATIOS.nursePerDoctor.optimal * 2,
+        "clinicalAssistant target = 1.5 * 2 = 3.0"
+      );
+
+      // frontdeskRatio: optimal=0.4, providers=2 => target=0.8
+      assert.strictEqual(
+        result.ratios.frontdeskRatio.meta?.targetDenominator,
+        STAFFING_RATIOS.receptionistPerProvider.optimal * 2,
+        "frontdesk target = 0.4 * 2 = 0.8"
+      );
+
+      // supportTotalRatio: optimal=2.0 (dental), providers=2 => target=4.0
+      assert.strictEqual(
+        result.ratios.supportTotalRatio.meta?.targetDenominator,
+        STAFFING_RATIOS.supportStaffPerDentist.optimal * 2,
+        "supportTotal target = 2.0 * 2 = 4.0"
+      );
+
+      // examRoomRatio: optimal=3.0, providers=2 => target=6.0
+      assert.strictEqual(
+        result.ratios.examRoomRatio.meta?.targetDenominator,
+        STAFFING_RATIOS.examRoomsPerProvider.optimal * 2,
+        "examRoom target = 3.0 * 2 = 6.0"
+      );
+    });
+
+    it("should calculate meta.deltaDenominator = targetDenominator - denominator", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 2, // below optimal 3.0
+        frontdeskCount: 1,           // above optimal 0.8
+        supportTotalCount: 3,        // below optimal 4.0
+        totalStaff: 5,
+        examRooms: 4,                // below optimal 6.0
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      // clinicalAssistant: target=3.0, actual=2 => delta=+1.0
+      assert.strictEqual(
+        result.ratios.clinicalAssistantRatio.meta?.deltaDenominator,
+        3.0 - 2,
+        "clinicalAssistant delta = 3.0 - 2 = 1.0"
+      );
+
+      // frontdesk: target=0.8, actual=1 => delta=-0.2
+      assert.strictEqual(
+        result.ratios.frontdeskRatio.meta?.deltaDenominator,
+        0.8 - 1,
+        "frontdesk delta = 0.8 - 1 = -0.2"
+      );
+
+      // supportTotal: target=4.0, actual=3 => delta=+1.0
+      assert.strictEqual(
+        result.ratios.supportTotalRatio.meta?.deltaDenominator,
+        4.0 - 3,
+        "supportTotal delta = 4.0 - 3 = 1.0"
+      );
+
+      // examRoom: target=6.0, actual=4 => delta=+2.0
+      assert.strictEqual(
+        result.ratios.examRoomRatio.meta?.deltaDenominator,
+        6.0 - 4,
+        "examRoom delta = 6.0 - 4 = 2.0"
+      );
+
+      console.log("Delta Calculations:");
+      console.log(`  clinicalAssistant: actual=2, target=3.0, delta=${result.ratios.clinicalAssistantRatio.meta?.deltaDenominator}`);
+      console.log(`  frontdesk: actual=1, target=0.8, delta=${result.ratios.frontdeskRatio.meta?.deltaDenominator}`);
+      console.log(`  supportTotal: actual=3, target=4.0, delta=${result.ratios.supportTotalRatio.meta?.deltaDenominator}`);
+      console.log(`  examRoom: actual=4, target=6.0, delta=${result.ratios.examRoomRatio.meta?.deltaDenominator}`);
+    });
+
+    it("should NOT include meta when providers = 0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 0,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 4,
+        examRooms: 6,
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      // Meta should be undefined when no providers
+      assert.strictEqual(result.ratios.clinicalAssistantRatio.meta, undefined);
+      assert.strictEqual(result.ratios.frontdeskRatio.meta, undefined);
+      assert.strictEqual(result.ratios.supportTotalRatio.meta, undefined);
+      assert.strictEqual(result.ratios.examRoomRatio.meta, undefined);
+    });
+
+    it("should include meta for FTE ratios when providersFte > 0", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 6,
+        practiceType: "dental",
+        providersFte: 1.8,
+        clinicalAssistantsFte: 2.5,
+        frontdeskFte: 0.7,
+        supportTotalFte: 3.2,
+      };
+
+      const result = evaluateStaffingRatios(input);
+
+      // FTE ratios should have meta with providersFte as numerator
+      assert.ok(result.ratios.clinicalAssistantFteRatio?.meta, "FTE ratio should have meta");
+      assert.strictEqual(result.ratios.clinicalAssistantFteRatio?.meta?.numerator, 1.8);
+      assert.strictEqual(result.ratios.clinicalAssistantFteRatio?.meta?.denominator, 2.5);
+
+      assert.ok(result.ratios.frontdeskFteRatio?.meta);
+      assert.strictEqual(result.ratios.frontdeskFteRatio?.meta?.numerator, 1.8);
+      assert.strictEqual(result.ratios.frontdeskFteRatio?.meta?.denominator, 0.7);
+
+      assert.ok(result.ratios.supportTotalFteRatio?.meta);
+      assert.strictEqual(result.ratios.supportTotalFteRatio?.meta?.numerator, 1.8);
+      assert.strictEqual(result.ratios.supportTotalFteRatio?.meta?.denominator, 3.2);
+    });
+
+    it("meta values should support UI display: 'Bei 2 Behandlern: Ist 4, Ziel 6, Delta +2'", () => {
+      const input: StaffingRatioInput = {
+        providersCount: 2,
+        clinicalAssistantsCount: 3,
+        frontdeskCount: 1,
+        supportTotalCount: 4,
+        totalStaff: 6,
+        examRooms: 4, // below optimal 6
+        practiceType: "dental",
+      };
+
+      const result = evaluateStaffingRatios(input);
+      const meta = result.ratios.examRoomRatio.meta!;
+
+      // Build display string
+      const basedOn = meta.numerator;       // 2 Behandler
+      const actual = meta.denominator;       // 4 Räume
+      const target = meta.targetDenominator; // 6 Räume
+      const delta = meta.deltaDenominator;   // +2 Räume
+
+      const displayString = `Bei ${basedOn} Behandlern: Ist ${actual} Räume | Ziel ${target} Räume | Δ ${delta >= 0 ? '+' : ''}${delta} Räume`;
+
+      console.log("UI Display Test:");
+      console.log(`  ${displayString}`);
+
+      assert.strictEqual(basedOn, 2);
+      assert.strictEqual(actual, 4);
+      assert.strictEqual(target, 6);
+      assert.strictEqual(delta, 2);
+    });
+  });
 });
